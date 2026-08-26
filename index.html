@@ -1,0 +1,2696 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0f1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Kasa · Finanzas Personales</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%230f1117'/><text x='96' y='130' font-size='100' text-anchor='middle' fill='%23c8f560'>K</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ───────────────────────────────────────────── */
+:root {
+  --bg: #f7f5f0;
+  --bg2: #edeae3;
+  --bg3: #e2dfd7;
+  --card: #ffffff;
+  --text: #111010;
+  --text2: #5a5851;
+  --text3: #9a9690;
+  --accent: #c8f560;
+  --accent2: #a8e040;
+  --danger: #ff4b4b;
+  --warn: #ffb347;
+  --ok: #4bda8e;
+  --blue: #3a8fff;
+  --border: rgba(0,0,0,0.08);
+  --border2: rgba(0,0,0,0.14);
+  --r: 14px;
+  --r2: 20px;
+  --shadow: 0 2px 16px rgba(0,0,0,0.07);
+  --font-head: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --nav-h: 68px;
+  --sidebar-w: 240px;
+}
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --bg2: #181b23;
+  --bg3: #21252f;
+  --card: #1e2230;
+  --text: #f0ede6;
+  --text2: #9fa3b0;
+  --text3: #5a5e6a;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --shadow: 0 2px 20px rgba(0,0,0,0.4);
+}
+
+/* ── RESET ────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden;transition:background .2s,color .2s}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input,select,textarea{font-family:inherit;outline:none;border:none}
+ul{list-style:none}
+a{text-decoration:none;color:inherit}
+
+/* ── LAYOUT ───────────────────────────────────────────── */
+#app{display:flex;min-height:100dvh}
+
+/* Sidebar */
+#sidebar{
+  width:var(--sidebar-w);
+  background:var(--card);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  position:fixed;left:0;top:0;bottom:0;
+  z-index:100;padding:0 0 1rem;
+  transition:transform .3s cubic-bezier(.4,0,.2,1),background .2s;
+}
+#sidebar-logo{
+  padding:1.5rem 1.4rem 1rem;
+  font-family:var(--font-head);font-size:1.5rem;font-weight:800;
+  display:flex;align-items:center;gap:.5rem;
+}
+#sidebar-logo .dot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--accent);display:inline-block;
+}
+#sidebar nav{flex:1;overflow-y:auto;padding:.5rem .8rem}
+.nav-item{
+  display:flex;align-items:center;gap:.75rem;
+  padding:.7rem .8rem;border-radius:10px;
+  font-size:.9rem;font-weight:500;color:var(--text2);
+  cursor:pointer;transition:all .15s;margin-bottom:2px;
+  border:1px solid transparent;
+}
+.nav-item:hover{background:var(--bg);color:var(--text)}
+.nav-item.active{background:var(--accent);color:#111;border-color:transparent}
+.nav-item .icon{font-size:1.2rem;width:22px;text-align:center}
+#sidebar-footer{padding:.5rem 1rem}
+.theme-btn{
+  display:flex;align-items:center;gap:.6rem;width:100%;
+  padding:.65rem .8rem;border-radius:10px;font-size:.85rem;
+  color:var(--text2);border:1px solid var(--border);
+  background:var(--bg2);transition:all .15s;
+}
+.theme-btn:hover{background:var(--bg3)}
+
+/* Main content */
+#main{
+  flex:1;
+  margin-left:var(--sidebar-w);
+  padding-bottom:1rem;
+  min-height:100dvh;
+}
+.page{display:none;padding:1.5rem;max-width:900px;margin:0 auto}
+.page.active{display:block}
+
+/* Bottom nav (mobile) */
+#bottom-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--card);border-top:1px solid var(--border);
+  height:var(--nav-h);z-index:100;
+  padding:0 .5rem;
+  align-items:center;justify-content:space-around;
+}
+.bnav-item{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:.5rem .6rem;border-radius:12px;cursor:pointer;
+  font-size:.7rem;font-weight:500;color:var(--text3);
+  transition:all .15s;flex:1;
+}
+.bnav-item.active{color:var(--text)}
+.bnav-item .icon{font-size:1.4rem;line-height:1}
+.bnav-item.active .icon-wrap{
+  background:var(--accent);border-radius:12px;
+  padding:4px 14px;color:#111;
+}
+
+/* FAB */
+#fab{
+  position:fixed;
+  right:1.25rem;
+  bottom:calc(var(--nav-h) + .9rem);
+  width:56px;height:56px;border-radius:50%;
+  background:var(--text);color:var(--bg);
+  font-size:1.8rem;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 20px rgba(0,0,0,0.25);
+  z-index:200;transition:transform .2s,background .2s;
+  cursor:pointer;
+}
+#fab:hover{transform:scale(1.07)}
+#fab:active{transform:scale(.95)}
+[data-theme="dark"] #fab{box-shadow:0 4px 24px rgba(0,0,0,.6)}
+
+/* ── CARDS & COMPONENTS ───────────────────────────────── */
+.card{
+  background:var(--card);border-radius:var(--r2);
+  border:1px solid var(--border);padding:1.25rem;
+  box-shadow:var(--shadow);
+}
+.card-sm{border-radius:var(--r);padding:1rem}
+.section-title{
+  font-family:var(--font-head);font-size:1.1rem;font-weight:700;
+  margin-bottom:1rem;letter-spacing:-.01em;
+}
+.muted{color:var(--text2);font-size:.85rem}
+
+/* Balance hero */
+#balance-hero{
+  background:var(--text);color:var(--bg);
+  border-radius:var(--r2);padding:1.5rem;
+  margin-bottom:1rem;position:relative;overflow:hidden;
+}
+#balance-hero::before{
+  content:'';position:absolute;right:-40px;top:-40px;
+  width:180px;height:180px;border-radius:50%;
+  background:rgba(255,255,255,.04);
+}
+#balance-hero .label{font-size:.8rem;opacity:.55;text-transform:uppercase;letter-spacing:.08em}
+#balance-hero .amount{
+  font-family:var(--font-head);font-size:2.6rem;font-weight:800;
+  line-height:1.1;margin:.25rem 0 1rem;
+}
+.balance-split{display:flex;gap:.75rem}
+.split-item{
+  flex:1;background:rgba(255,255,255,.08);
+  border-radius:var(--r);padding:.75rem;
+}
+.split-item .s-label{font-size:.72rem;opacity:.5;margin-bottom:.2rem}
+.split-item .s-val{font-family:var(--font-head);font-size:1.15rem;font-weight:700}
+
+/* Stat grid */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem}
+.stat-card{
+  background:var(--card);border-radius:var(--r);
+  border:1px solid var(--border);padding:.9rem 1rem;
+}
+.stat-card .s-label{font-size:.75rem;color:var(--text2);margin-bottom:.3rem}
+.stat-card .s-val{font-family:var(--font-head);font-size:1.35rem;font-weight:700}
+.stat-card .s-val.danger{color:var(--danger)}
+.stat-card .s-val.ok{color:var(--ok)}
+
+/* Traffic light */
+.semaforo{
+  border-radius:var(--r);padding:1rem;margin-bottom:1rem;
+  border:1px solid var(--border);
+}
+.semaforo.green{background:rgba(75,218,142,.12);border-color:rgba(75,218,142,.3)}
+.semaforo.yellow{background:rgba(255,179,71,.12);border-color:rgba(255,179,71,.3)}
+.semaforo.red{background:rgba(255,75,75,.12);border-color:rgba(255,75,75,.3)}
+.semaforo .sem-head{display:flex;align-items:center;gap:.5rem;font-weight:600;font-size:.9rem;margin-bottom:.3rem}
+.semaforo .sem-dot{width:10px;height:10px;border-radius:50%}
+.semaforo.green .sem-dot{background:var(--ok)}
+.semaforo.yellow .sem-dot{background:var(--warn)}
+.semaforo.red .sem-dot{background:var(--danger)}
+
+/* Progress bar */
+.prog-bar{height:8px;background:var(--bg3);border-radius:999px;overflow:hidden;margin:.5rem 0}
+.prog-fill{height:100%;border-radius:999px;transition:width .5s ease}
+.prog-fill.green{background:var(--ok)}
+.prog-fill.yellow{background:var(--warn)}
+.prog-fill.red{background:var(--danger)}
+.prog-fill.blue{background:var(--blue)}
+
+/* Transaction list */
+.tx-list{display:flex;flex-direction:column;gap:.5rem}
+.tx-item{
+  display:flex;align-items:center;gap:.85rem;
+  padding:.85rem 1rem;background:var(--card);
+  border:1px solid var(--border);border-radius:var(--r);
+  cursor:pointer;transition:all .15s;
+}
+.tx-item:hover{border-color:var(--border2);transform:translateX(2px)}
+.tx-icon{
+  width:38px;height:38px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;flex-shrink:0;
+}
+.tx-icon.income{background:rgba(75,218,142,.15);color:var(--ok)}
+.tx-icon.expense{background:rgba(255,75,75,.13);color:var(--danger)}
+.tx-icon.saving{background:rgba(58,143,255,.15);color:var(--blue)}
+.tx-info{flex:1;min-width:0}
+.tx-info .tx-cat{font-weight:500;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-info .tx-sub{font-size:.76rem;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-amount{font-family:var(--font-head);font-weight:700;font-size:1rem;flex-shrink:0}
+.tx-amount.income{color:var(--ok)}
+.tx-amount.expense{color:var(--danger)}
+.tx-amount.saving{color:var(--blue)}
+.tx-actions{display:flex;gap:.4rem;flex-shrink:0}
+.tx-btn{
+  width:28px;height:28px;border-radius:7px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.85rem;transition:all .15s;border:1px solid var(--border);
+  color:var(--text2);
+}
+.tx-btn:hover{background:var(--bg2);border-color:var(--border2)}
+.tx-btn.del:hover{background:rgba(255,75,75,.1);color:var(--danger);border-color:rgba(255,75,75,.3)}
+
+/* Fixed expenses */
+.fijo-item{
+  display:flex;align-items:center;gap:.75rem;
+  padding:.8rem 1rem;background:var(--card);
+  border:1px solid var(--border);border-radius:var(--r);margin-bottom:.5rem;
+}
+.fijo-check{
+  width:22px;height:22px;border-radius:6px;
+  border:2px solid var(--border2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.75rem;transition:all .15s;flex-shrink:0;
+}
+.fijo-check.paid{background:var(--ok);border-color:var(--ok);color:#fff}
+.fijo-info{flex:1}
+.fijo-info .f-name{font-weight:500;font-size:.9rem}
+.fijo-info .f-sub{font-size:.75rem;color:var(--text2)}
+.fijo-amount{font-family:var(--font-head);font-weight:700;font-size:.95rem}
+.fijo-amount.paid{color:var(--ok)}
+.fijo-amount.unpaid{color:var(--text2)}
+
+/* Badges */
+.badge{
+  display:inline-flex;align-items:center;
+  padding:2px 8px;border-radius:99px;font-size:.72rem;font-weight:500;
+}
+.badge.efectivo{background:rgba(58,143,255,.15);color:var(--blue)}
+.badge.transfer{background:rgba(200,245,96,.2);color:#5a7a10}
+[data-theme="dark"] .badge.transfer{color:var(--accent)}
+.badge.paid{background:rgba(75,218,142,.15);color:var(--ok)}
+.badge.unpaid{background:rgba(255,179,71,.15);color:#b07020}
+[data-theme="dark"] .badge.unpaid{color:var(--warn)}
+
+/* Filters */
+.filter-bar{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.5rem;margin-bottom:1rem;scrollbar-width:none}
+.filter-bar::-webkit-scrollbar{display:none}
+.filter-chip{
+  white-space:nowrap;padding:.4rem .85rem;border-radius:99px;
+  font-size:.8rem;font-weight:500;cursor:pointer;
+  border:1px solid var(--border);color:var(--text2);
+  background:var(--card);transition:all .15s;flex-shrink:0;
+}
+.filter-chip.active{background:var(--text);color:var(--bg);border-color:transparent}
+
+/* Month selector */
+.month-nav{
+  display:flex;align-items:center;gap:.5rem;margin-bottom:1.25rem;
+}
+.month-nav .m-btn{
+  width:32px;height:32px;border-radius:8px;
+  border:1px solid var(--border);background:var(--card);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1rem;color:var(--text2);cursor:pointer;transition:all .15s;
+}
+.month-nav .m-btn:hover{background:var(--bg2)}
+.month-nav .m-label{font-family:var(--font-head);font-size:1rem;font-weight:700;flex:1;text-align:center}
+
+/* Insights */
+.insight-card{
+  background:var(--card);border-radius:var(--r2);border:1px solid var(--border);
+  padding:1.2rem;margin-bottom:.75rem;
+}
+.insight-card .i-head{
+  display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem;
+  font-family:var(--font-head);font-size:.95rem;font-weight:700;
+}
+.insight-card .i-icon{
+  width:32px;height:32px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:1rem;
+}
+
+/* Rule bars */
+.rule-row{margin-bottom:.85rem}
+.rule-row:last-child{margin-bottom:0}
+.rule-labels{display:flex;justify-content:space-between;font-size:.78rem;color:var(--text2);margin-bottom:.3rem}
+.rule-labels strong{color:var(--text);font-weight:600}
+
+/* Ant alert */
+.ant-alert{
+  background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.3);
+  border-radius:var(--r);padding:.85rem;
+  display:flex;gap:.75rem;align-items:flex-start;
+}
+.ant-alert .ant-icon{font-size:1.3rem;flex-shrink:0;margin-top:1px}
+
+/* ── MODAL ────────────────────────────────────────────── */
+#modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  z-index:500;display:none;align-items:flex-end;justify-content:center;
+  backdrop-filter:blur(3px);
+}
+#modal-overlay.open{display:flex}
+@media(min-width:640px){
+  #modal-overlay{align-items:center}
+  #modal-box{border-radius:var(--r2) !important;max-width:480px;max-height:90vh}
+}
+#modal-box{
+  background:var(--card);
+  border-radius:var(--r2) var(--r2) 0 0;
+  width:100%;max-height:92dvh;
+  overflow-y:auto;padding:1.5rem;
+  animation:slideUp .25s cubic-bezier(.4,0,.2,1);
+}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-title{font-family:var(--font-head);font-size:1.2rem;font-weight:700;margin-bottom:1.25rem;display:flex;justify-content:space-between;align-items:center}
+.modal-close{width:32px;height:32px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--text2);cursor:pointer;border:1px solid var(--border)}
+
+/* Forms */
+.form-group{margin-bottom:1rem}
+.form-label{font-size:.8rem;font-weight:600;color:var(--text2);margin-bottom:.4rem;display:block;text-transform:uppercase;letter-spacing:.04em}
+.form-input{
+  width:100%;padding:.7rem .9rem;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r);color:var(--text);font-size:.9rem;
+  transition:border-color .15s;
+}
+.form-input:focus{border-color:var(--text2)}
+.form-input::placeholder{color:var(--text3)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.tab-switcher{display:flex;background:var(--bg2);border-radius:var(--r);padding:3px;gap:3px;margin-bottom:1.25rem}
+.tab-switch-btn{
+  flex:1;padding:.55rem;border-radius:9px;font-size:.85rem;
+  font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;
+  text-align:center;
+}
+.tab-switch-btn.active{background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.btn-primary{
+  width:100%;padding:.85rem;border-radius:var(--r);
+  background:var(--text);color:var(--bg);
+  font-family:var(--font-head);font-size:1rem;font-weight:700;
+  cursor:pointer;transition:all .15s;margin-top:.5rem;
+}
+.btn-primary:hover{opacity:.87}
+.btn-primary:active{transform:scale(.98)}
+
+/* Type pick (income/expense) */
+.type-pick{display:flex;gap:.5rem;margin-bottom:1rem}
+.type-btn{
+  flex:1;padding:.65rem;border-radius:var(--r);
+  font-weight:600;font-size:.85rem;cursor:pointer;
+  border:2px solid var(--border);color:var(--text2);
+  transition:all .15s;text-align:center;
+}
+.type-btn.income.active{border-color:var(--ok);background:rgba(75,218,142,.12);color:var(--ok)}
+.type-btn.expense.active{border-color:var(--danger);background:rgba(255,75,75,.1);color:var(--danger)}
+
+/* Quick type selector (FAB modal) */
+.quick-types{display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem}
+.quick-type-btn{
+  flex:1 1 calc(50% - .4rem);min-width:120px;padding:1rem;border-radius:var(--r2);
+  border:2px solid var(--border);background:var(--bg2);
+  cursor:pointer;text-align:center;transition:all .2s;
+}
+.quick-type-btn:hover{border-color:var(--border2);transform:scale(1.02)}
+.quick-type-btn .qt-icon{font-size:1.8rem;margin-bottom:.4rem}
+.quick-type-btn .qt-label{font-weight:600;font-size:.85rem;color:var(--text2)}
+.quick-type-btn.selected-income{border-color:var(--ok);background:rgba(75,218,142,.1)}
+.quick-type-btn.selected-income .qt-label{color:var(--ok)}
+.quick-type-btn.selected-expense{border-color:var(--danger);background:rgba(255,75,75,.08)}
+.quick-type-btn.selected-expense .qt-label{color:var(--danger)}
+.quick-type-btn.selected-fijo{border-color:var(--blue);background:rgba(58,143,255,.08)}
+.quick-type-btn.selected-fijo .qt-label{color:var(--blue)}
+.quick-type-btn.selected-saving{border-color:#8a5cf6;background:rgba(138,92,246,.08)}
+.quick-type-btn.selected-saving .qt-label{color:#8a5cf6}
+.type-btn.saving.active{border-color:#8a5cf6;background:rgba(138,92,246,.1);color:#8a5cf6}
+
+/* Empty state */
+.empty{
+  text-align:center;padding:3rem 1rem;
+  color:var(--text3);font-size:.9rem;
+}
+.empty .e-icon{font-size:2.5rem;margin-bottom:.75rem;opacity:.4}
+
+/* Export area */
+.export-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.export-btn-card{
+  padding:1.25rem;border-radius:var(--r2);border:1px solid var(--border);
+  background:var(--card);cursor:pointer;text-align:center;transition:all .15s;
+}
+.export-btn-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.export-btn-card .eb-icon{font-size:2rem;margin-bottom:.5rem}
+.export-btn-card .eb-label{font-weight:600;font-size:.9rem}
+.export-btn-card .eb-sub{font-size:.75rem;color:var(--text2);margin-top:.2rem}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:calc(var(--nav-h) + 1rem);left:50%;
+  transform:translateX(-50%) translateY(20px);
+  background:var(--text);color:var(--bg);
+  padding:.6rem 1.2rem;border-radius:99px;
+  font-size:.85rem;font-weight:500;
+  z-index:999;opacity:0;pointer-events:none;
+  transition:all .3s;white-space:nowrap;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── RESPONSIVE ───────────────────────────────────────── */
+@media(max-width:768px){
+  #sidebar{transform:translateX(-100%)}
+  #sidebar.mobile-open{transform:translateX(0)}
+  #main{margin-left:0;padding-bottom:calc(var(--nav-h) + 1rem)}
+  #bottom-nav{display:flex}
+  .page{padding:1rem}
+  #balance-hero .amount{font-size:2rem}
+  .form-row{grid-template-columns:1fr}
+  #sidebar-overlay{display:none;position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.4)}
+  #sidebar-overlay.open{display:block}
+}
+@media(min-width:769px){
+  #fab{bottom:1.25rem}
+  #toast{bottom:1.5rem}
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:99px}
+
+/* Page header */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+.page-header h1{font-family:var(--font-head);font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+.header-actions{display:flex;gap:.5rem;align-items:center}
+.icon-btn{
+  width:36px;height:36px;border-radius:10px;
+  border:1px solid var(--border);background:var(--card);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;color:var(--text2);cursor:pointer;transition:all .15s;
+}
+.icon-btn:hover{background:var(--bg2);border-color:var(--border2)}
+.hamburger{display:none}
+@media(max-width:768px){.hamburger{display:flex}}
+
+/* Summary row on Gastos Fijos */
+.fijos-summary{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.85rem 1rem;background:var(--bg2);border-radius:var(--r);
+  margin-bottom:1rem;font-size:.85rem;
+}
+.fijos-summary .fs-val{font-family:var(--font-head);font-weight:700;font-size:1rem}
+
+/* Meta / goal card (gastos fijos diarios & ahorro) */
+.goal-card{
+  border-radius:var(--r2);padding:1.1rem 1.25rem;margin-bottom:1rem;
+  background:linear-gradient(135deg, rgba(58,143,255,.12), rgba(138,92,246,.1));
+  border:1px solid rgba(58,143,255,.25);
+}
+.goal-card .g-label{font-size:.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.15rem}
+.goal-card .g-amount{font-family:var(--font-head);font-size:1.9rem;font-weight:800;color:var(--blue);line-height:1.1}
+.goal-card .g-sub{font-size:.78rem;color:var(--text2);margin-top:.35rem}
+.goal-card.purple{background:linear-gradient(135deg, rgba(138,92,246,.12), rgba(200,245,96,.1));border-color:rgba(138,92,246,.25)}
+.goal-card.purple .g-amount{color:#8a5cf6}
+
+/* Ahorros summary cards */
+.ahorro-summary{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem}
+.ahorro-card{
+  background:var(--card);border-radius:var(--r);border:1px solid var(--border);
+  padding:1rem;text-align:center;
+}
+.ahorro-card .a-label{font-size:.75rem;color:var(--text2);margin-bottom:.3rem}
+.ahorro-card .a-val{font-family:var(--font-head);font-size:1.4rem;font-weight:700;color:#8a5cf6}
+
+/* Conciliación */
+.stat-card.clickable{cursor:pointer;transition:all .15s}
+.stat-card.clickable:hover{border-color:var(--border2);transform:translateY(-2px)}
+.s-diff{font-size:.72rem;margin-top:.3rem;font-weight:600}
+.s-diff.pos{color:var(--ok)}
+.s-diff.neg{color:var(--danger)}
+.s-diff.zero{color:var(--text3)}
+.recon-summary{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem}
+.recon-card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);padding:1rem;text-align:center}
+.recon-card .r-label{font-size:.72rem;color:var(--text2);margin-bottom:.3rem}
+.recon-card .r-val{font-family:var(--font-head);font-size:1.25rem;font-weight:700}
+.recon-prev-box{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:.85rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;
+}
+.recon-prev-box .rp-label{font-size:.75rem;color:var(--text2)}
+.recon-prev-box .rp-val{font-family:var(--font-head);font-weight:700;font-size:1.05rem}
+.recon-diff-preview{
+  border-radius:var(--r);padding:.9rem 1rem;margin-bottom:1rem;text-align:center;
+  border:1px solid var(--border);background:var(--bg2);transition:all .2s;
+}
+.recon-diff-preview .rd-label{font-size:.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.2rem}
+.recon-diff-preview .rd-val{font-family:var(--font-head);font-size:1.6rem;font-weight:800}
+.recon-diff-preview.pos{background:rgba(75,218,142,.12);border-color:rgba(75,218,142,.3)}
+.recon-diff-preview.pos .rd-val{color:var(--ok)}
+.recon-diff-preview.neg{background:rgba(255,75,75,.1);border-color:rgba(255,75,75,.3)}
+.recon-diff-preview.neg .rd-val{color:var(--danger)}
+.recon-item{
+  display:flex;align-items:center;gap:.85rem;padding:.85rem 1rem;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:.5rem;
+}
+.recon-item .ri-icon{
+  width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;flex-shrink:0;background:rgba(58,143,255,.13);color:var(--blue);
+}
+.recon-item .ri-info{flex:1;min-width:0}
+.recon-item .ri-main{font-weight:500;font-size:.9rem}
+.recon-item .ri-sub{font-size:.76rem;color:var(--text2);margin-top:1px}
+.recon-item .ri-diff{font-family:var(--font-head);font-weight:700;font-size:1rem;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<!-- Sidebar overlay (mobile) -->
+<div id="sidebar-overlay"></div>
+
+<!-- Sidebar -->
+<aside id="sidebar">
+  <div id="sidebar-logo"><span class="dot"></span>Kasa</div>
+  <nav id="sidebar-nav">
+    <div class="nav-item active" data-page="dashboard">
+      <span class="icon">🏠</span> Dashboard
+    </div>
+    <div class="nav-item" data-page="transacciones">
+      <span class="icon">📋</span> Transacciones
+    </div>
+    <div class="nav-item" data-page="fijos">
+      <span class="icon">📌</span> Gastos Fijos
+    </div>
+    <div class="nav-item" data-page="ahorros">
+      <span class="icon">💰</span> Ahorros
+    </div>
+    <div class="nav-item" data-page="patrimonio">
+      <span class="icon">🏦</span> Patrimonio
+    </div>
+    <div class="nav-item" data-page="conciliacion">
+      <span class="icon">🧮</span> Conciliación
+    </div>
+    <div class="nav-item" data-page="insights">
+      <span class="icon">💡</span> Insights
+    </div>
+    <div class="nav-item" data-page="exportar">
+      <span class="icon">📤</span> Exportar
+    </div>
+  </nav>
+  <div id="sidebar-footer">
+    <button class="theme-btn" id="theme-toggle-sidebar">
+      <span id="theme-icon-sidebar">🌙</span>
+      <span id="theme-text-sidebar">Modo oscuro</span>
+    </button>
+  </div>
+</aside>
+
+<!-- Main -->
+<main id="main">
+
+  <!-- DASHBOARD -->
+  <section class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger">☰</button>
+        <h1>Dashboard</h1>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle-mobile">🌙</button>
+        <button class="icon-btn" id="add-btn-top" title="Agregar">＋</button>
+      </div>
+    </div>
+
+    <div class="month-nav">
+      <button class="m-btn" id="prev-month">‹</button>
+      <div class="m-label" id="month-label">—</div>
+      <button class="m-btn" id="next-month">›</button>
+    </div>
+
+    <!-- Balance hero: KPIs principales del resumen -->
+    <div id="balance-hero">
+      <div class="label">Total Disponible</div>
+      <div class="amount" id="hero-balance">$0</div>
+      <div class="balance-split">
+        <div class="split-item">
+          <div class="s-label">📉 Total de Gastos</div>
+          <div class="s-val" id="hero-cash">$0</div>
+        </div>
+        <div class="split-item">
+          <div class="s-label">💰 Total Ahorrado</div>
+          <div class="s-val" id="hero-bank">$0</div>
+        </div>
+        <div class="split-item">
+          <div class="s-label">⚖️ Ajuste Conciliación</div>
+          <div class="s-val" id="hero-adjust">$0</div>
+        </div>
+      </div>
+      <div class="muted" style="font-size:.72rem;opacity:.6;margin-top:.6rem" id="hero-adjust-note"></div>
+    </div>
+
+    <!-- Efectivo vs Digital -->
+    <div class="stat-grid" style="margin-bottom:1rem">
+      <div class="stat-card clickable" id="card-cash" onclick="openReconciliationModal('efectivo')" title="Toca para conciliar tu saldo real en efectivo">
+        <div class="s-label">💵 Total en Efectivo</div>
+        <div class="s-val" id="stat-cash-total">$0</div>
+        <div class="s-diff zero" id="stat-cash-diff"></div>
+      </div>
+      <div class="stat-card clickable" id="card-digital" onclick="openReconciliationModal('transfer')" title="Toca para conciliar tu saldo real digital">
+        <div class="s-label">💳 Total en Digital</div>
+        <div class="s-val" id="stat-digital-total">$0</div>
+        <div class="s-diff zero" id="stat-digital-diff"></div>
+      </div>
+    </div>
+
+    <!-- Meta diaria de gastos fijos (suma de todos los gastos fijos) -->
+    <div class="goal-card" id="dash-goal-card" style="display:none">
+      <div class="g-label">🎯 Necesitas conseguir hoy</div>
+      <div class="g-amount" id="dash-meta-diaria">$0</div>
+      <div class="g-sub" id="dash-meta-sub">Agrega gastos fijos con sus días elegibles</div>
+    </div>
+
+    <!-- Stats grid -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="s-label">📈 Ingresos del mes</div>
+        <div class="s-val ok" id="stat-income">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="s-label">📉 Gastos del mes</div>
+        <div class="s-val danger" id="stat-expense">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="s-label">📌 Gastos fijos totales</div>
+        <div class="s-val" id="stat-fijos-pending">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="s-label">💰 Ahorrado este mes</div>
+        <div class="s-val" id="stat-saving">$0</div>
+      </div>
+    </div>
+
+    <!-- Semáforo -->
+    <div id="semaforo-widget" class="semaforo green" style="margin-bottom:1rem">
+      <div class="sem-head"><div class="sem-dot"></div><span id="sem-title">Finanzas saludables</span></div>
+      <p style="font-size:.82rem;color:var(--text2)" id="sem-msg">Tus gastos están bajo control.</p>
+    </div>
+
+    <!-- Recent transactions -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <div class="section-title" style="margin:0">Recientes</div>
+      <span style="font-size:.8rem;color:var(--text2);cursor:pointer" onclick="goToPage('transacciones')">Ver todo →</span>
+    </div>
+    <div id="recent-list" class="tx-list"></div>
+  </section>
+
+  <!-- TRANSACCIONES -->
+  <section class="page" id="page-transacciones">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger2">☰</button>
+        <h1>Transacciones</h1>
+      </div>
+      <button class="icon-btn" id="add-btn-tx">＋</button>
+    </div>
+
+    <div class="filter-bar" id="filter-bar">
+      <div class="filter-chip active" data-filter="all">Todo</div>
+      <div class="filter-chip" data-filter="mes">Este mes</div>
+      <div class="filter-chip" data-filter="income">Ingresos</div>
+      <div class="filter-chip" data-filter="expense">Gastos</div>
+      <div class="filter-chip" data-filter="saving">Ahorros</div>
+      <div class="filter-chip" data-filter="efectivo">Efectivo</div>
+      <div class="filter-chip" data-filter="transfer">Transferencia</div>
+    </div>
+
+    <div id="tx-list" class="tx-list"></div>
+  </section>
+
+  <!-- GASTOS FIJOS -->
+  <section class="page" id="page-fijos">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger3">☰</button>
+        <h1>Gastos Fijos</h1>
+      </div>
+      <button class="icon-btn" id="add-btn-fijo">＋</button>
+    </div>
+
+    <div class="fijos-summary" id="fijos-summary">
+      <div>
+        <div style="font-size:.75rem;color:var(--text2)">Total compromisos</div>
+        <div class="fs-val" id="fijos-total-val">$0</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:.75rem;color:var(--text2)">Meta diaria</div>
+        <div class="fs-val" style="color:var(--blue)" id="fijos-pending-val">$0</div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:.75rem">Mis gastos fijos</div>
+    <div id="fijos-list"></div>
+  </section>
+
+  <!-- AHORROS -->
+  <section class="page" id="page-ahorros">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger6">☰</button>
+        <h1>Ahorros</h1>
+      </div>
+      <button class="icon-btn" id="add-btn-ahorro">＋</button>
+    </div>
+
+    <div class="ahorro-summary">
+      <div class="ahorro-card">
+        <div class="a-label">💰 Total Ahorrado</div>
+        <div class="a-val" id="ahorro-total-val">$0</div>
+      </div>
+      <div class="ahorro-card">
+        <div class="a-label">📅 Ahorrado este mes</div>
+        <div class="a-val" id="ahorro-mes-val">$0</div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:.75rem">Movimientos de ahorro</div>
+    <div id="ahorros-list" class="tx-list"></div>
+  </section>
+
+  <!-- PATRIMONIO (Activos y Pasivos) -->
+  <section class="page" id="page-patrimonio">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger8">☰</button>
+        <h1>Patrimonio</h1>
+      </div>
+      <button class="icon-btn" id="add-btn-patrimonio">＋</button>
+    </div>
+    <p class="muted" style="margin-bottom:1rem">Registra lo que tienes (activos) y lo que debes (pasivos). Esto alimenta tu <strong>Balance General</strong> y las métricas de endeudamiento.</p>
+
+    <div class="ahorro-summary">
+      <div class="ahorro-card">
+        <div class="a-label">🟢 Total Activos</div>
+        <div class="a-val" style="color:var(--ok)" id="pat-activos-val">$0</div>
+      </div>
+      <div class="ahorro-card">
+        <div class="a-label">🔴 Total Pasivos</div>
+        <div class="a-val" style="color:var(--danger)" id="pat-pasivos-val">$0</div>
+      </div>
+    </div>
+    <div class="goal-card" style="background:linear-gradient(135deg,rgba(75,218,142,.12),rgba(58,143,255,.1));border-color:rgba(75,218,142,.25)">
+      <div class="g-label">⚖️ Patrimonio Neto</div>
+      <div class="g-amount" style="color:var(--ok)" id="pat-neto-val">$0</div>
+      <div class="g-sub" id="pat-neto-sub">Activos − Pasivos. Incluye tus ahorros acumulados automáticamente.</div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:.75rem">🟢 Activos (lo que tienes)</div>
+    <div id="activos-list" style="margin-bottom:1.25rem"></div>
+    <div class="section-title" style="margin-bottom:.75rem">🔴 Pasivos (lo que debes)</div>
+    <div id="pasivos-list"></div>
+  </section>
+
+  <!-- CONCILIACIÓN -->
+  <section class="page" id="page-conciliacion">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger7">☰</button>
+        <h1>Conciliación</h1>
+      </div>
+      <button class="icon-btn" id="add-btn-conciliacion">＋</button>
+    </div>
+    <p class="muted" style="margin-bottom:1rem">Compara tu saldo real (efectivo o digital) contra lo registrado y guarda la diferencia como tu ganancia o total hecho en el periodo.</p>
+
+    <div class="recon-summary">
+      <div class="recon-card">
+        <div class="r-label">💵 Última dif. Efectivo</div>
+        <div class="r-val" id="recon-last-cash">—</div>
+      </div>
+      <div class="recon-card">
+        <div class="r-label">💳 Última dif. Digital</div>
+        <div class="r-val" id="recon-last-digital">—</div>
+      </div>
+    </div>
+    <div class="recon-summary">
+      <div class="recon-card">
+        <div class="r-label">⚖️ Diferencia acumulada</div>
+        <div class="r-val" id="recon-total-diff">$0</div>
+      </div>
+      <div class="recon-card">
+        <div class="r-label">🧮 Conciliaciones hechas</div>
+        <div class="r-val" id="recon-count">0</div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:.75rem">Historial de conciliaciones</div>
+    <div id="recon-list"></div>
+  </section>
+
+  <!-- INSIGHTS -->
+  <section class="page" id="page-insights">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger4">☰</button>
+        <h1>Insights</h1>
+      </div>
+    </div>
+
+    <!-- Regla 50/30/20 -->
+    <div class="insight-card">
+      <div class="i-head">
+        <div class="i-icon" style="background:rgba(58,143,255,.12);color:var(--blue)">📊</div>
+        Regla 50/30/20
+      </div>
+      <div id="rule-5030" class="rule-row">
+        <div class="rule-labels"><span>Gastos Fijos</span><strong id="r-fixed-pct">0%</strong></div>
+        <div class="prog-bar"><div class="prog-fill blue" id="r-fixed-bar" style="width:0%"></div></div>
+        <div style="font-size:.75rem;color:var(--text2)">Meta: ≤50% de ingresos</div>
+      </div>
+      <div class="rule-row">
+        <div class="rule-labels"><span>Gastos Variables</span><strong id="r-var-pct">0%</strong></div>
+        <div class="prog-bar"><div class="prog-fill yellow" id="r-var-bar" style="width:0%"></div></div>
+        <div style="font-size:.75rem;color:var(--text2)">Meta: ≤30% de ingresos</div>
+      </div>
+      <div class="rule-row" style="margin-bottom:0">
+        <div class="rule-labels"><span>Ahorro estimado</span><strong id="r-save-pct">0%</strong></div>
+        <div class="prog-bar"><div class="prog-fill green" id="r-save-bar" style="width:0%"></div></div>
+        <div style="font-size:.75rem;color:var(--text2)">Meta: ≥20% de ingresos</div>
+      </div>
+    </div>
+
+    <!-- Alerta hormiga -->
+    <div class="insight-card" id="ant-card" style="display:none">
+      <div class="i-head">
+        <div class="i-icon" style="background:rgba(255,179,71,.13);color:var(--warn)">🐜</div>
+        Gastos Hormiga Detectados
+      </div>
+      <div id="ant-list"></div>
+    </div>
+
+    <!-- Categorías top -->
+    <div class="insight-card">
+      <div class="i-head">
+        <div class="i-icon" style="background:rgba(75,218,142,.12);color:var(--ok)">🔍</div>
+        Top Categorías de Gasto (mes actual)
+      </div>
+      <div id="cat-breakdown"></div>
+    </div>
+
+    <!-- Conciliación resumen -->
+    <div class="insight-card" id="insight-recon-card" style="display:none">
+      <div class="i-head">
+        <div class="i-icon" style="background:rgba(58,143,255,.12);color:var(--blue)">🧮</div>
+        Conciliación de Saldos
+      </div>
+      <div id="insight-recon-body"></div>
+    </div>
+  </section>
+
+  <!-- EXPORTAR -->
+  <section class="page" id="page-exportar">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger5">☰</button>
+        <h1>Exportar</h1>
+      </div>
+    </div>
+    <!-- ESTADOS FINANCIEROS + ANÁLISIS -->
+    <div class="section-title">📑 Estados Financieros (EEFF)</div>
+    <p class="muted" style="margin-bottom:.75rem">Genera tu Estado de Resultados y Balance General personal con análisis y recomendaciones. El periodo es el mes seleccionado en el Dashboard: <strong id="report-period-label">—</strong>.</p>
+    <div class="export-grid" style="margin-bottom:1.5rem">
+      <div class="export-btn-card" id="report-pdf">
+        <div class="eb-icon">🧾</div>
+        <div class="eb-label">Reporte PDF</div>
+        <div class="eb-sub">EEFF + Análisis · imprimible</div>
+      </div>
+      <div class="export-btn-card" id="report-csv">
+        <div class="eb-icon">📈</div>
+        <div class="eb-label">EEFF en CSV</div>
+        <div class="eb-sub">Estados + métricas</div>
+      </div>
+    </div>
+
+    <div class="section-title">💾 Respaldo de datos</div>
+    <p class="muted" style="margin-bottom:.75rem">Descarga todos tus datos financieros para respaldos o para abrirlos en Excel.</p>
+    <div class="export-grid">
+      <div class="export-btn-card" id="export-json">
+        <div class="eb-icon">📦</div>
+        <div class="eb-label">JSON</div>
+        <div class="eb-sub">Respaldo completo</div>
+      </div>
+      <div class="export-btn-card" id="export-csv">
+        <div class="eb-icon">📊</div>
+        <div class="eb-label">CSV / Excel</div>
+        <div class="eb-sub">Transacciones</div>
+      </div>
+    </div>
+    <div style="margin-top:1.5rem">
+      <div class="section-title">Importar datos</div>
+      <p class="muted" style="margin-bottom:.75rem">Restaura un respaldo JSON previamente exportado.</p>
+      <label style="display:block">
+        <div class="export-btn-card" style="display:flex;align-items:center;gap:.75rem;text-align:left;padding:1rem">
+          <div style="font-size:1.5rem">📂</div>
+          <div>
+            <div style="font-weight:600;font-size:.9rem">Seleccionar archivo JSON</div>
+            <div style="font-size:.75rem;color:var(--text2)">Esto reemplazará todos tus datos</div>
+          </div>
+        </div>
+        <input type="file" id="import-file" accept=".json" style="display:none">
+      </label>
+    </div>
+  </section>
+
+</main>
+
+<!-- Bottom Nav -->
+<nav id="bottom-nav">
+  <div class="bnav-item active" data-page="dashboard">
+    <div class="icon-wrap"><div class="icon">🏠</div></div>
+    <span>Inicio</span>
+  </div>
+  <div class="bnav-item" data-page="transacciones">
+    <div class="icon-wrap"><div class="icon">📋</div></div>
+    <span>Movimientos</span>
+  </div>
+  <div class="bnav-item" data-page="fijos">
+    <div class="icon-wrap"><div class="icon">📌</div></div>
+    <span>Fijos</span>
+  </div>
+  <div class="bnav-item" data-page="ahorros">
+    <div class="icon-wrap"><div class="icon">💰</div></div>
+    <span>Ahorros</span>
+  </div>
+  <div class="bnav-item" data-page="insights">
+    <div class="icon-wrap"><div class="icon">💡</div></div>
+    <span>Insights</span>
+  </div>
+  <div class="bnav-item" data-page="exportar">
+    <div class="icon-wrap"><div class="icon">📤</div></div>
+    <span>Exportar</span>
+  </div>
+</nav>
+
+<!-- FAB -->
+<button id="fab" aria-label="Agregar transacción">＋</button>
+
+<!-- Modal -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div class="modal-title">
+      <span id="modal-title-text">Nueva transacción</span>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+/* ─────────────────────────────────────────────────────────
+   STORAGE — IndexedDB with LocalStorage fallback
+───────────────────────────────────────────────────────── */
+const DB_NAME = 'kasa_db';
+const DB_VERSION = 3;
+let db = null;
+
+async function initDB() {
+  try {
+    if (!('indexedDB' in window)) throw new Error('IndexedDB no soportado en este navegador');
+    return await new Promise((resolve, reject) => {
+      try {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onerror = () => reject(req.error || new Error('Error abriendo IndexedDB'));
+        req.onsuccess = () => { db = req.result; resolve(db); };
+        req.onupgradeneeded = e => {
+          const d = e.target.result;
+          if (!d.objectStoreNames.contains('transactions'))
+            d.createObjectStore('transactions', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('fijos'))
+            d.createObjectStore('fijos', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('balances'))
+            d.createObjectStore('balances', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('patrimonio'))
+            d.createObjectStore('patrimonio', { keyPath: 'id' });
+        };
+      } catch (innerErr) { reject(innerErr); }
+    });
+  } catch (err) {
+    console.warn('⚠ IndexedDB no disponible, usando almacenamiento alterno:', err);
+    db = null;
+    return null;
+  }
+}
+
+/* Respaldo en memoria: si IndexedDB Y localStorage fallan (por ejemplo dentro
+   de una vista previa en sandbox o un WebView restringido), la app sigue
+   funcionando durante la sesión en lugar de que los botones "no hagan nada". */
+const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [] };
+
+function safeLSGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function safeLSSet(key, value) {
+  try { localStorage.setItem(key, value); return true; } catch (e) { return false; }
+}
+
+function dbGet(store) {
+  return new Promise((resolve) => {
+    if (!db) {
+      const raw = safeLSGet(store);
+      if (raw !== null) {
+        try { resolve(JSON.parse(raw)); return; } catch (e) { /* fall through */ }
+      }
+      resolve(memoryFallback[store] || []);
+      return;
+    }
+    try {
+      const tx = db.transaction(store, 'readonly');
+      const req = tx.objectStore(store).getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => {
+        const raw = safeLSGet(store);
+        resolve(raw !== null ? JSON.parse(raw) : (memoryFallback[store] || []));
+      };
+    } catch (e) {
+      const raw = safeLSGet(store);
+      resolve(raw !== null ? JSON.parse(raw) : (memoryFallback[store] || []));
+    }
+  });
+}
+
+function dbPut(store, item) {
+  return new Promise((resolve) => {
+    // Siempre se actualiza el respaldo en memoria primero: garantiza que la UI
+    // pueda reflejar el cambio aunque el almacenamiento persistente falle.
+    const memArr = memoryFallback[store] || (memoryFallback[store] = []);
+    const mIdx = memArr.findIndex(x => x.id === item.id);
+    if (mIdx >= 0) memArr[mIdx] = item; else memArr.push(item);
+
+    if (!db) {
+      try {
+        let arr = JSON.parse(safeLSGet(store) || '[]');
+        const idx = arr.findIndex(x => x.id === item.id);
+        if (idx >= 0) arr[idx] = item; else arr.push(item);
+        safeLSSet(store, JSON.stringify(arr));
+      } catch (e) { /* se conserva igual en memoryFallback */ }
+      resolve(item);
+      return;
+    }
+    try {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).put(item);
+      tx.oncomplete = () => resolve(item);
+      tx.onerror = () => resolve(item);
+    } catch (e) { resolve(item); }
+  });
+}
+
+function dbDelete(store, id) {
+  return new Promise((resolve) => {
+    memoryFallback[store] = (memoryFallback[store] || []).filter(x => x.id !== id);
+
+    if (!db) {
+      try {
+        let arr = JSON.parse(safeLSGet(store) || '[]');
+        safeLSSet(store, JSON.stringify(arr.filter(x => x.id !== id)));
+      } catch (e) { /* se conserva igual en memoryFallback */ }
+      resolve(true);
+      return;
+    }
+    try {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).delete(id);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(true);
+    } catch (e) { resolve(true); }
+  });
+}
+
+/* ─────────────────────────────────────────────────────────
+   DATA LAYER
+───────────────────────────────────────────────────────── */
+let transactions = [];
+let fijos = [];
+let balances = [];
+let patrimonio = [];
+
+const INCOME_CATS = ['Salario', 'Freelance', 'Ventas', 'Inversiones', 'Regalos', 'Otros ingresos'];
+const EXPENSE_CATS = ['Comida', 'Transporte', 'Salud', 'Entretenimiento', 'Ropa', 'Café/Snacks', 'Tecnología', 'Educación', 'Belleza', 'Hogar', 'Otros gastos'];
+const SAVING_CATS = ['Ahorro general', 'Fondo de emergencia', 'Meta de viaje', 'Inversión', 'Retiro', 'Otro ahorro'];
+const FIJO_CATS = ['Arriendo/Hipoteca', 'Internet', 'Luz/Agua/Gas', 'Teléfono', 'Streaming', 'Gimnasio', 'Seguro', 'Crédito', 'Otros fijos'];
+const ACTIVO_CATS = ['Cuenta bancaria', 'Efectivo', 'Inversiones', 'Bienes raíces', 'Vehículo', 'Fondo de retiro', 'Cuentas por cobrar', 'Otro activo'];
+const PASIVO_CATS = ['Tarjeta de crédito', 'Préstamo bancario', 'Crédito de consumo', 'Hipoteca', 'Deuda personal', 'Impuestos por pagar', 'Otro pasivo'];
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+/* ─────────────────────────────────────────────────────────
+   GASTOS FIJOS ACUMULABLES (meta fusionada en cada gasto)
+   Cada gasto fijo trae su propio monto y días elegibles.
+   Se calcula: diaria = monto / días
+───────────────────────────────────────────────────────── */
+function fijoDiaria(f) {
+  return f.dias > 0 ? f.amount / f.dias : 0;
+}
+
+function fijosDiarioTotal() {
+  return fijos.reduce((s, f) => s + fijoDiaria(f), 0);
+}
+
+/* ─────────────────────────────────────────────────────────
+   TOTALES POR TIPO DE CUENTA (Efectivo vs Digital)
+   Balance por cuenta = Ingresos - Gastos - Ahorros, filtrado
+   por el campo "account" de cada transacción.
+───────────────────────────────────────────────────────── */
+function accountTotals() {
+  const calcBalance = (account) => {
+    const arr = transactions.filter(t => t.account === account);
+    const inc = arr.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
+    const exp = arr.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
+    const sav = arr.filter(t => t.type === 'saving').reduce((s,t) => s+t.amount, 0);
+    return inc - exp - sav;
+  };
+  return { cash: calcBalance('efectivo'), digital: calcBalance('transfer') };
+}
+
+/* ─────────────────────────────────────────────────────────
+   CONCILIACIÓN DE SALDOS
+   Compara el último saldo registrado (conciliación previa o,
+   si no existe, el saldo calculado por transacciones) contra
+   el nuevo saldo real ingresado por el usuario, y guarda la
+   diferencia (ganancia / total hecho en el periodo).
+───────────────────────────────────────────────────────── */
+const ACCOUNT_LABELS = { efectivo: 'Efectivo', transfer: 'Digital' };
+
+function lastReconciliation(account) {
+  const arr = balances.filter(b => b.account === account)
+    .sort((a, b) => new Date(b.date) - new Date(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+  return arr.length ? arr[0] : null;
+}
+
+// Saldo anterior de referencia: usa la última conciliación guardada;
+// si nunca se ha conciliado, usa el saldo calculado desde las transacciones.
+function previousBalanceFor(account) {
+  const last = lastReconciliation(account);
+  if (last) return last.amount;
+  const acc = accountTotals();
+  return account === 'efectivo' ? acc.cash : acc.digital;
+}
+
+function sumReconciliationDiffs(account) {
+  return balances.filter(b => !account || b.account === account)
+    .reduce((s, b) => s + b.diff, 0);
+}
+
+async function saveBalanceRecord(rec) {
+  await dbPut('balances', rec);
+  const idx = balances.findIndex(x => x.id === rec.id);
+  if (idx >= 0) balances[idx] = rec; else balances.push(rec);
+}
+
+async function deleteBalanceRecord(id) {
+  await dbDelete('balances', id);
+  balances = balances.filter(x => x.id !== id);
+}
+
+async function loadData() {
+  transactions = await dbGet('transactions');
+  fijos = await dbGet('fijos');
+  balances = await dbGet('balances');
+  patrimonio = await dbGet('patrimonio');
+}
+
+async function saveTransaction(tx) {
+  await dbPut('transactions', tx);
+  const idx = transactions.findIndex(x => x.id === tx.id);
+  if (idx >= 0) transactions[idx] = tx; else transactions.push(tx);
+}
+
+async function deleteTransaction(id) {
+  await dbDelete('transactions', id);
+  transactions = transactions.filter(x => x.id !== id);
+}
+
+async function saveFijo(fijo) {
+  await dbPut('fijos', fijo);
+  const idx = fijos.findIndex(x => x.id === fijo.id);
+  if (idx >= 0) fijos[idx] = fijo; else fijos.push(fijo);
+}
+
+async function deleteFijo(id) {
+  await dbDelete('fijos', id);
+  fijos = fijos.filter(x => x.id !== id);
+}
+
+async function savePatrimonio(item) {
+  await dbPut('patrimonio', item);
+  const idx = patrimonio.findIndex(x => x.id === item.id);
+  if (idx >= 0) patrimonio[idx] = item; else patrimonio.push(item);
+}
+
+async function deletePatrimonio(id) {
+  await dbDelete('patrimonio', id);
+  patrimonio = patrimonio.filter(x => x.id !== id);
+}
+
+/* ─────────────────────────────────────────────────────────
+   TOTALES DE PATRIMONIO (para Balance General)
+   Activos = activos manuales + ahorros acumulados (auto)
+   Pasivos = pasivos manuales
+───────────────────────────────────────────────────────── */
+function totalAhorrado() {
+  return transactions.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
+}
+function manualActivos() {
+  return patrimonio.filter(p => p.kind === 'activo').reduce((s, p) => s + p.amount, 0);
+}
+function manualPasivos() {
+  return patrimonio.filter(p => p.kind === 'pasivo').reduce((s, p) => s + p.amount, 0);
+}
+function patrimonioTotals() {
+  const ahorros = totalAhorrado();
+  const activos = manualActivos() + ahorros;
+  const pasivos = manualPasivos();
+  return { ahorros, activos, pasivos, neto: activos - pasivos };
+}
+
+/* ─────────────────────────────────────────────────────────
+   NAVIGATION & PAGES
+───────────────────────────────────────────────────────── */
+let currentPage = 'dashboard';
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+
+function goToPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-item, .bnav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === page);
+  });
+  closeSidebar();
+  renderPage(page);
+}
+
+function renderPage(page) {
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'transacciones') renderTransactions();
+  if (page === 'fijos') renderFijos();
+  if (page === 'ahorros') renderAhorros();
+  if (page === 'patrimonio') renderPatrimonio();
+  if (page === 'conciliacion') renderConciliacion();
+  if (page === 'insights') renderInsights();
+  if (page === 'exportar') renderExportar();
+}
+
+/* ─────────────────────────────────────────────────────────
+   FORMATTERS
+───────────────────────────────────────────────────────── */
+function fmt(n) {
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+}
+
+const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function isSameMonth(dateStr, month, year) {
+  const d = new Date(dateStr);
+  return d.getMonth() === month && d.getFullYear() === year;
+}
+
+/* ─────────────────────────────────────────────────────────
+   DASHBOARD
+───────────────────────────────────────────────────────── */
+function renderDashboard() {
+  document.getElementById('month-label').textContent = MONTHS_ES[currentMonth] + ' ' + currentYear;
+
+  const monthTx = transactions.filter(t => isSameMonth(t.date, currentMonth, currentYear));
+  const income = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const expense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const savingMonth = monthTx.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
+
+  // Totales generales (todo el histórico): Total Disponible = Ingresos - Gastos - Ahorros
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
+  const totalSaving = transactions.filter(t => t.type === 'saving').reduce((s,t) => s+t.amount, 0);
+  const totalDisponible = totalIncome - totalExpense - totalSaving;
+
+  // Ajuste por conciliación: diferencia acumulada entre saldo real y saldo calculado
+  const totalAdjust = sumReconciliationDiffs();
+  const adjustedTotal = totalDisponible + totalAdjust;
+
+  document.getElementById('hero-balance').textContent = fmt(adjustedTotal);
+  document.getElementById('hero-cash').textContent = fmt(totalExpense);
+  document.getElementById('hero-bank').textContent = fmt(totalSaving);
+  const heroAdjustEl = document.getElementById('hero-adjust');
+  heroAdjustEl.textContent = (totalAdjust >= 0 ? '+' : '') + fmt(totalAdjust);
+  document.getElementById('hero-adjust-note').textContent = balances.length
+    ? 'El Total Disponible incluye la diferencia de tus conciliaciones de saldo.'
+    : 'Concilia tu saldo real en Efectivo o Digital para ajustar este total.';
+  document.getElementById('stat-income').textContent = fmt(income);
+  document.getElementById('stat-expense').textContent = fmt(expense);
+  document.getElementById('stat-saving').textContent = fmt(savingMonth);
+
+  // Efectivo vs Digital (saldo histórico por tipo de cuenta)
+  const accTotals = accountTotals();
+  document.getElementById('stat-cash-total').textContent = fmt(accTotals.cash);
+  document.getElementById('stat-digital-total').textContent = fmt(accTotals.digital);
+
+  // Diferencia de la última conciliación por cuenta
+  renderAccountDiffBadge('stat-cash-diff', 'efectivo');
+  renderAccountDiffBadge('stat-digital-diff', 'transfer');
+
+  const fixedTotal = fijos.reduce((s,f) => s+f.amount, 0);
+  document.getElementById('stat-fijos-pending').textContent = fmt(fixedTotal);
+
+  // Meta diaria acumulable de gastos fijos (suma de monto ÷ días de cada uno)
+  const diariaTotal = fijosDiarioTotal();
+  const goalCard = document.getElementById('dash-goal-card');
+  if (fijos.length > 0) {
+    goalCard.style.display = 'block';
+    document.getElementById('dash-meta-diaria').textContent = fmt(diariaTotal);
+    document.getElementById('dash-meta-sub').textContent = 'Meta diaria combinada de tus gastos fijos';
+  } else {
+    goalCard.style.display = 'none';
+  }
+
+  // Semaforo
+  const ratio = income > 0 ? (expense + fixedTotal) / income : 0;
+  const sem = document.getElementById('semaforo-widget');
+  const semT = document.getElementById('sem-title');
+  const semM = document.getElementById('sem-msg');
+  sem.className = 'semaforo';
+  if (ratio >= 0.9) {
+    sem.classList.add('red');
+    semT.textContent = '🔴 Gasto crítico';
+    semM.textContent = 'Tus gastos superan el 90% de los ingresos. Considera reducir gastos no esenciales urgentemente.';
+  } else if (ratio >= 0.7) {
+    sem.classList.add('yellow');
+    semT.textContent = '🟡 Atención';
+    semM.textContent = 'Tus gastos superan el 70% de ingresos. Revisa en qué puedes ahorrar este mes.';
+  } else {
+    sem.classList.add('green');
+    semT.textContent = '🟢 Finanzas saludables';
+    semM.textContent = ratio > 0 ? `Solo el ${Math.round(ratio*100)}% de tus ingresos está comprometido. ¡Buen trabajo!` : 'Registra tus ingresos y gastos para comenzar.';
+  }
+
+  // Recent (last 5)
+  const sorted = [...transactions].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+  const list = document.getElementById('recent-list');
+  if (!sorted.length) {
+    list.innerHTML = '<div class="empty"><div class="e-icon">📭</div>Sin movimientos aún. Toca + para agregar.</div>';
+    return;
+  }
+  list.innerHTML = sorted.map(t => txItemHTML(t, false)).join('');
+  attachTxEvents(list);
+}
+
+function renderAccountDiffBadge(elId, account) {
+  const el = document.getElementById(elId);
+  const last = lastReconciliation(account);
+  if (!last) { el.textContent = 'Sin conciliar aún · toca para conciliar'; el.className = 's-diff zero'; return; }
+  const sign = last.diff > 0 ? '+' : (last.diff < 0 ? '' : '±');
+  el.className = 's-diff ' + (last.diff > 0 ? 'pos' : (last.diff < 0 ? 'neg' : 'zero'));
+  el.textContent = `Última conciliación: ${sign}${fmt(last.diff)}`;
+}
+
+/* ─────────────────────────────────────────────────────────
+   TRANSACTIONS PAGE
+───────────────────────────────────────────────────────── */
+let activeFilter = 'all';
+
+function renderTransactions() {
+  document.querySelectorAll('.filter-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.filter === activeFilter);
+    c.onclick = () => { activeFilter = c.dataset.filter; renderTransactions(); };
+  });
+
+  let filtered = [...transactions];
+  if (activeFilter === 'mes') filtered = filtered.filter(t => isSameMonth(t.date, currentMonth, currentYear));
+  else if (activeFilter === 'income') filtered = filtered.filter(t => t.type === 'income');
+  else if (activeFilter === 'expense') filtered = filtered.filter(t => t.type === 'expense');
+  else if (activeFilter === 'saving') filtered = filtered.filter(t => t.type === 'saving');
+  else if (activeFilter === 'efectivo') filtered = filtered.filter(t => t.account === 'efectivo');
+  else if (activeFilter === 'transfer') filtered = filtered.filter(t => t.account === 'transfer');
+
+  filtered.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const list = document.getElementById('tx-list');
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty"><div class="e-icon">🔍</div>No hay transacciones con este filtro.</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(t => txItemHTML(t, true)).join('');
+  attachTxEvents(list);
+}
+
+function txItemHTML(t, showActions) {
+  const isIncome = t.type === 'income';
+  const isSaving = t.type === 'saving';
+  const sign = isIncome ? '+' : (isSaving ? '↳' : '-');
+  const icon = isIncome ? '↑' : (isSaving ? '💰' : '↓');
+  const d = new Date(t.date);
+  const dateStr = d.toLocaleDateString('es-CO', {day:'2-digit', month:'short'});
+  const accountBadge = t.account === 'efectivo'
+    ? '<span class="badge efectivo">Efectivo</span>'
+    : '<span class="badge transfer">Transferencia</span>';
+  const actions = showActions ? `
+    <div class="tx-actions">
+      <button class="tx-btn edit" data-id="${t.id}" title="Editar">✏️</button>
+      <button class="tx-btn del" data-id="${t.id}" title="Eliminar">🗑</button>
+    </div>` : '';
+  return `
+    <div class="tx-item" data-id="${t.id}">
+      <div class="tx-icon ${t.type}">${icon}</div>
+      <div class="tx-info">
+        <div class="tx-cat">${t.category}</div>
+        <div class="tx-sub">${dateStr} · ${accountBadge}${t.notes ? ` · ${t.notes}` : ''}</div>
+      </div>
+      <div class="tx-amount ${t.type}">${sign}${fmt(t.amount)}</div>
+      ${actions}
+    </div>`;
+}
+
+function attachTxEvents(container) {
+  container.querySelectorAll('.tx-btn.edit').forEach(btn => {
+    btn.onclick = e => { e.stopPropagation(); openEditTx(btn.dataset.id); };
+  });
+  container.querySelectorAll('.tx-btn.del').forEach(btn => {
+    btn.onclick = e => { e.stopPropagation(); confirmDeleteTx(btn.dataset.id); };
+  });
+}
+
+/* ─────────────────────────────────────────────────────────
+   GASTOS FIJOS
+───────────────────────────────────────────────────────── */
+function renderFijos() {
+  const list = document.getElementById('fijos-list');
+  const total = fijos.reduce((s,f) => s+f.amount, 0);
+  const diariaTotal = fijosDiarioTotal();
+
+  document.getElementById('fijos-total-val').textContent = fmt(total);
+  document.getElementById('fijos-pending-val').textContent = fmt(diariaTotal);
+
+  if (!fijos.length) {
+    list.innerHTML = '<div class="empty"><div class="e-icon">📌</div>Sin gastos fijos registrados.</div>';
+    return;
+  }
+  list.innerHTML = fijos.map(f => {
+    const diaria = fijoDiaria(f);
+    return `
+    <div class="fijo-item">
+      <div class="fijo-info">
+        <div class="f-name">${f.name}</div>
+        <div class="f-sub">${f.category} · ${f.dias || 0} días elegibles · ${fmt(diaria)}/día</div>
+      </div>
+      <div class="fijo-amount">${fmt(f.amount)}</div>
+      <div class="tx-actions" style="margin-left:.5rem">
+        <button class="tx-btn edit" data-id="${f.id}">✏️</button>
+        <button class="tx-btn del" data-id="${f.id}">🗑</button>
+      </div>
+    </div>
+  `;
+  }).join('');
+
+  list.querySelectorAll('.tx-btn.edit').forEach(btn => {
+    btn.onclick = () => openEditFijo(btn.dataset.id);
+  });
+  list.querySelectorAll('.tx-btn.del').forEach(btn => {
+    btn.onclick = () => confirmDeleteFijo(btn.dataset.id);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────
+   AHORROS
+───────────────────────────────────────────────────────── */
+function renderAhorros() {
+  const savingTx = transactions.filter(t => t.type === 'saving');
+  const total = savingTx.reduce((s,t) => s+t.amount, 0);
+  const monthTotal = savingTx.filter(t => isSameMonth(t.date, currentMonth, currentYear)).reduce((s,t) => s+t.amount, 0);
+
+  document.getElementById('ahorro-total-val').textContent = fmt(total);
+  document.getElementById('ahorro-mes-val').textContent = fmt(monthTotal);
+
+  const list = document.getElementById('ahorros-list');
+  const sorted = [...savingTx].sort((a,b) => new Date(b.date) - new Date(a.date));
+  if (!sorted.length) {
+    list.innerHTML = '<div class="empty"><div class="e-icon">💰</div>Sin ahorros registrados. Toca + para agregar uno.</div>';
+    return;
+  }
+  list.innerHTML = sorted.map(t => txItemHTML(t, true)).join('');
+  attachTxEvents(list);
+}
+
+/* ─────────────────────────────────────────────────────────
+   PATRIMONIO (Activos y Pasivos)
+───────────────────────────────────────────────────────── */
+function renderPatrimonio() {
+  const tot = patrimonioTotals();
+  document.getElementById('pat-activos-val').textContent = fmt(tot.activos);
+  document.getElementById('pat-pasivos-val').textContent = fmt(tot.pasivos);
+  const netoEl = document.getElementById('pat-neto-val');
+  netoEl.textContent = fmt(tot.neto);
+  netoEl.style.color = tot.neto >= 0 ? 'var(--ok)' : 'var(--danger)';
+  document.getElementById('pat-neto-sub').textContent =
+    `Incluye ${fmt(tot.ahorros)} de ahorros acumulados como activo.`;
+
+  renderPatrimonioList('activo', 'activos-list', '🟢', 'Sin activos registrados. Toca + para agregar.');
+  renderPatrimonioList('pasivo', 'pasivos-list', '🔴', 'Sin pasivos registrados. ¡Bien! O toca + para agregar una deuda.');
+}
+
+function renderPatrimonioList(kind, elId, emoji, emptyMsg) {
+  const list = document.getElementById(elId);
+  const items = patrimonio.filter(p => p.kind === kind)
+    .sort((a, b) => b.amount - a.amount);
+
+  // La lista de activos añade una fila automática con los ahorros acumulados.
+  let autoRow = '';
+  if (kind === 'activo') {
+    const ah = totalAhorrado();
+    if (ah > 0) autoRow = `
+      <div class="fijo-item" style="opacity:.85">
+        <div class="fijo-info">
+          <div class="f-name">Ahorros acumulados 💰</div>
+          <div class="f-sub">Automático · desde tus movimientos de ahorro</div>
+        </div>
+        <div class="fijo-amount paid">${fmt(ah)}</div>
+      </div>`;
+  }
+
+  if (!items.length && !autoRow) {
+    list.innerHTML = `<div class="empty"><div class="e-icon">${emoji}</div>${emptyMsg}</div>`;
+    return;
+  }
+  list.innerHTML = autoRow + items.map(p => `
+    <div class="fijo-item">
+      <div class="fijo-info">
+        <div class="f-name">${p.name}</div>
+        <div class="f-sub">${p.category}${p.notes ? ' · ' + p.notes : ''}</div>
+      </div>
+      <div class="fijo-amount" style="color:${kind === 'activo' ? 'var(--ok)' : 'var(--danger)'}">${fmt(p.amount)}</div>
+      <div class="tx-actions" style="margin-left:.5rem">
+        <button class="tx-btn edit" data-id="${p.id}">✏️</button>
+        <button class="tx-btn del" data-id="${p.id}">🗑</button>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('.tx-btn.edit').forEach(btn => {
+    btn.onclick = () => openPatrimonioForm(patrimonio.find(x => x.id === btn.dataset.id));
+  });
+  list.querySelectorAll('.tx-btn.del').forEach(btn => {
+    btn.onclick = () => confirmDeletePatrimonio(btn.dataset.id);
+  });
+}
+
+function openPatrimonioForm(existing, defaultKind) {
+  const kind = existing ? existing.kind : (defaultKind || 'activo');
+  const cats = kind === 'activo' ? ACTIVO_CATS : PASIVO_CATS;
+  const p = existing || { name: '', amount: '', category: cats[0], notes: '', kind };
+  _patKind = kind;
+  openModal((existing ? 'Editar' : 'Nuevo') + ' registro de patrimonio', `
+    <div class="form-group">
+      <label class="form-label">Tipo *</label>
+      <div class="type-pick">
+        <div class="type-btn income ${_patKind==='activo'?'active':''}" id="pk-activo" onclick="switchPatKind('activo')">🟢 Activo (tienes)</div>
+        <div class="type-btn expense ${_patKind==='pasivo'?'active':''}" id="pk-pasivo" onclick="switchPatKind('pasivo')">🔴 Pasivo (debes)</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre / Descripción *</label>
+      <input class="form-input" type="text" id="pf-name" placeholder="Ej: Cuenta de ahorros / Tarjeta Visa" value="${p.name}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Monto actual *</label>
+      <input class="form-input" type="number" id="pf-amount" placeholder="0" value="${p.amount}" min="0">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoría *</label>
+      <select class="form-input" id="pf-category"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nota (opcional)</label>
+      <input class="form-input" type="text" id="pf-notes" placeholder="Sin nota" value="${p.notes || ''}">
+    </div>
+    <button class="btn-primary" onclick="savePatrimonioForm('${existing?.id || ''}')">
+      ${existing ? 'Guardar cambios' : 'Agregar'}
+    </button>
+  `);
+  fillPatCategories(p.category);
+}
+
+let _patKind = 'activo';
+function switchPatKind(kind) {
+  _patKind = kind;
+  document.getElementById('pk-activo').classList.toggle('active', kind === 'activo');
+  document.getElementById('pk-pasivo').classList.toggle('active', kind === 'pasivo');
+  fillPatCategories();
+}
+function fillPatCategories(selected) {
+  const cats = _patKind === 'activo' ? ACTIVO_CATS : PASIVO_CATS;
+  document.getElementById('pf-category').innerHTML =
+    cats.map(c => `<option ${c === selected ? 'selected' : ''}>${c}</option>`).join('');
+}
+
+async function savePatrimonioForm(existingId) {
+  const name = document.getElementById('pf-name').value.trim();
+  const amount = parseFloat(document.getElementById('pf-amount').value);
+  const category = document.getElementById('pf-category').value;
+  const notes = document.getElementById('pf-notes').value.trim();
+  if (!name) { showToast('⚠ Ingresa un nombre'); return; }
+  if (!amount || amount <= 0) { showToast('⚠ Ingresa un monto válido'); return; }
+
+  const item = { id: existingId || uid(), kind: _patKind, name, amount, category, notes };
+  try {
+    await savePatrimonio(item);
+    closeModal();
+    showToast(existingId ? '✏️ Patrimonio actualizado' : '✅ Registro guardado');
+    renderPatrimonio();
+  } catch (e) {
+    console.error('Error guardando patrimonio:', e);
+    showToast('❌ No se pudo guardar. Intenta de nuevo.');
+  }
+}
+
+async function confirmDeletePatrimonio(id) {
+  if (!(await appConfirm('¿Eliminar este registro de patrimonio? Esta acción no se puede deshacer.'))) return;
+  try {
+    await deletePatrimonio(id);
+    showToast('🗑 Eliminado');
+    renderPatrimonio();
+  } catch (e) {
+    console.error('Error eliminando patrimonio:', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   CONCILIACIÓN — página
+───────────────────────────────────────────────────────── */
+function renderConciliacion() {
+  const lastCash = lastReconciliation('efectivo');
+  const lastDigital = lastReconciliation('transfer');
+
+  const setKpi = (id, rec) => {
+    const el = document.getElementById(id);
+    if (!rec) { el.textContent = '—'; el.style.color = ''; return; }
+    const sign = rec.diff > 0 ? '+' : '';
+    el.textContent = sign + fmt(rec.diff);
+    el.style.color = rec.diff > 0 ? 'var(--ok)' : (rec.diff < 0 ? 'var(--danger)' : '');
+  };
+  setKpi('recon-last-cash', lastCash);
+  setKpi('recon-last-digital', lastDigital);
+
+  const totalDiff = sumReconciliationDiffs();
+  const totalEl = document.getElementById('recon-total-diff');
+  totalEl.textContent = (totalDiff >= 0 ? '+' : '') + fmt(totalDiff);
+  totalEl.style.color = totalDiff > 0 ? 'var(--ok)' : (totalDiff < 0 ? 'var(--danger)' : '');
+  document.getElementById('recon-count').textContent = balances.length;
+
+  const list = document.getElementById('recon-list');
+  if (!balances.length) {
+    list.innerHTML = '<div class="empty"><div class="e-icon">🧮</div>Sin conciliaciones aún. Toca + o una tarjeta de saldo en el Dashboard para comparar tu saldo real.</div>';
+    return;
+  }
+  const sorted = [...balances].sort((a,b) => new Date(b.date) - new Date(a.date) || (b.createdAt||0)-(a.createdAt||0));
+  list.innerHTML = sorted.map(b => {
+    const sign = b.diff > 0 ? '+' : '';
+    const color = b.diff > 0 ? 'var(--ok)' : (b.diff < 0 ? 'var(--danger)' : 'var(--text2)');
+    const d = new Date(b.date);
+    const dateStr = d.toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
+    return `
+    <div class="recon-item">
+      <div class="ri-icon">${b.account === 'efectivo' ? '💵' : '💳'}</div>
+      <div class="ri-info">
+        <div class="ri-main">${ACCOUNT_LABELS[b.account]} · ${dateStr}</div>
+        <div class="ri-sub">${fmt(b.previousAmount)} → ${fmt(b.amount)}${b.notes ? ' · ' + b.notes : ''}</div>
+      </div>
+      <div class="ri-diff" style="color:${color}">${sign}${fmt(b.diff)}</div>
+      <div class="tx-actions" style="margin-left:.25rem">
+        <button class="tx-btn del" data-id="${b.id}">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.tx-btn.del').forEach(btn => {
+    btn.onclick = () => confirmDeleteReconciliation(btn.dataset.id);
+  });
+}
+
+async function confirmDeleteReconciliation(id) {
+  if (!(await appConfirm('¿Eliminar este registro de conciliación? Esta acción no se puede deshacer.'))) return;
+  try {
+    await deleteBalanceRecord(id);
+    showToast('🗑 Eliminado');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error eliminando conciliación:', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   INSIGHTS
+───────────────────────────────────────────────────────── */
+function renderInsights() {
+  const monthTx = transactions.filter(t => isSameMonth(t.date, currentMonth, currentYear));
+  const income = monthTx.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
+  const varExp = monthTx.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
+  const fixedTotal = fijos.reduce((s,f) => s+f.amount, 0);
+  const saving = monthTx.filter(t => t.type === 'saving').reduce((s,t) => s+t.amount, 0);
+
+  // 50/30/20
+  const fixPct = income > 0 ? Math.min(100, Math.round(fixedTotal / income * 100)) : 0;
+  const varPct = income > 0 ? Math.min(100, Math.round(varExp / income * 100)) : 0;
+  const savePct = income > 0 ? Math.min(100, Math.round(saving / income * 100)) : 0;
+
+  document.getElementById('r-fixed-pct').textContent = fixPct + '%';
+  document.getElementById('r-var-pct').textContent = varPct + '%';
+  document.getElementById('r-save-pct').textContent = savePct + '%';
+  setBar('r-fixed-bar', fixPct, fixPct > 50 ? 'red' : 'blue');
+  setBar('r-var-bar', varPct, varPct > 30 ? 'red' : 'yellow');
+  setBar('r-save-bar', savePct, savePct < 20 ? 'yellow' : 'green');
+
+  // Ant alert
+  const notes = monthTx.filter(t => t.type === 'expense' && t.notes).map(t => t.notes.toLowerCase().trim());
+  const noteCounts = {};
+  notes.forEach(n => { noteCounts[n] = (noteCounts[n] || 0) + 1; });
+  const ants = Object.entries(noteCounts).filter(([,c]) => c >= 2).sort((a,b) => b[1]-a[1]);
+  const antCard = document.getElementById('ant-card');
+  if (ants.length) {
+    antCard.style.display = 'block';
+    document.getElementById('ant-list').innerHTML = ants.slice(0,5).map(([note, count]) => `
+      <div class="ant-alert" style="margin-bottom:.5rem">
+        <div class="ant-icon">🐜</div>
+        <div>
+          <div style="font-weight:600;font-size:.85rem">"${note}"</div>
+          <div style="font-size:.78rem;color:var(--text2)">Registrado ${count} veces este mes. Considera presupuestar este gasto.</div>
+        </div>
+      </div>`).join('');
+  } else {
+    antCard.style.display = 'none';
+  }
+
+  // Category breakdown
+  const byCat = {};
+  monthTx.filter(t => t.type === 'expense').forEach(t => {
+    byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+  });
+  const sorted = Object.entries(byCat).sort((a,b) => b[1]-a[1]);
+  const catEl = document.getElementById('cat-breakdown');
+  if (!sorted.length) { catEl.innerHTML = '<p class="muted">Sin gastos este mes.</p>'; }
+  else {
+    const max = sorted[0][1];
+    catEl.innerHTML = sorted.map(([cat, amt]) => `
+      <div class="rule-row">
+        <div class="rule-labels"><span>${cat}</span><strong>${fmt(amt)}</strong></div>
+        <div class="prog-bar"><div class="prog-fill blue" style="width:${Math.round(amt/max*100)}%"></div></div>
+      </div>`).join('');
+  }
+
+  // Resumen de conciliación de saldos
+  const reconCard = document.getElementById('insight-recon-card');
+  const reconBody = document.getElementById('insight-recon-body');
+  if (balances.length) {
+    reconCard.style.display = 'block';
+    const lastCash = lastReconciliation('efectivo');
+    const lastDigital = lastReconciliation('transfer');
+    const totalDiff = sumReconciliationDiffs();
+    const rows = [
+      ['Última dif. Efectivo', lastCash],
+      ['Última dif. Digital', lastDigital]
+    ].map(([label, rec]) => {
+      const val = rec ? (rec.diff >= 0 ? '+' : '') + fmt(rec.diff) : 'Sin conciliar';
+      const color = rec ? (rec.diff > 0 ? 'var(--ok)' : (rec.diff < 0 ? 'var(--danger)' : 'var(--text2)')) : 'var(--text3)';
+      return `<div class="rule-labels" style="margin-bottom:.5rem"><span>${label}</span><strong style="color:${color}">${val}</strong></div>`;
+    }).join('');
+    reconBody.innerHTML = rows + `
+      <div class="rule-labels" style="margin-top:.25rem;padding-top:.5rem;border-top:1px solid var(--border)">
+        <span>Diferencia acumulada (todas las conciliaciones)</span>
+        <strong style="color:${totalDiff > 0 ? 'var(--ok)' : (totalDiff < 0 ? 'var(--danger)' : 'var(--text2)')}">${(totalDiff>=0?'+':'')+fmt(totalDiff)}</strong>
+      </div>
+      <p class="muted" style="margin-top:.5rem">Este valor ya está incluido en tu Total Disponible del Dashboard.</p>`;
+  } else {
+    reconCard.style.display = 'none';
+  }
+}
+
+function setBar(id, pct, cls) {
+  const el = document.getElementById(id);
+  el.style.width = pct + '%';
+  el.className = `prog-fill ${cls}`;
+}
+
+/* ─────────────────────────────────────────────────────────
+   MODALS
+───────────────────────────────────────────────────────── */
+let editingId = null;
+let editingFijoId = null;
+let modalMode = null;  // 'tx-income' | 'tx-expense' | 'fijo' | 'quick'
+
+function openModal(titleText, content) {
+  document.getElementById('modal-title-text').textContent = titleText;
+  document.getElementById('modal-content').innerHTML = content;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingId = null; editingFijoId = null; modalMode = null;
+}
+
+/* Confirm personalizado: reemplaza window.confirm(), que puede quedar
+   bloqueado o deshabilitado dentro de vistas previas en sandbox, PWAs
+   instaladas o algunos WebViews móviles, dejando los botones "sin efecto". */
+function appConfirm(message, confirmLabel) {
+  return new Promise(resolve => {
+    openModal('Confirmar acción', `
+      <p style="margin-bottom:1.25rem;font-size:.92rem;line-height:1.5">${message}</p>
+      <div style="display:flex;gap:.6rem">
+        <button class="btn-primary" style="background:var(--bg2);color:var(--text);border:1px solid var(--border)" id="ac-cancel">Cancelar</button>
+        <button class="btn-primary" style="background:var(--danger);color:#fff" id="ac-ok">${confirmLabel || 'Eliminar'}</button>
+      </div>
+    `);
+    const cleanup = (result) => { closeModal(); resolve(result); };
+    document.getElementById('ac-cancel').onclick = () => cleanup(false);
+    document.getElementById('ac-ok').onclick = () => cleanup(true);
+  });
+}
+
+function openFabModal() {
+  openModal('Nueva entrada', `
+    <p class="muted" style="margin-bottom:1rem">¿Qué quieres registrar?</p>
+    <div class="quick-types">
+      <div class="quick-type-btn" id="qt-income">
+        <div class="qt-icon">📈</div>
+        <div class="qt-label">Ingreso</div>
+      </div>
+      <div class="quick-type-btn" id="qt-expense">
+        <div class="qt-icon">💸</div>
+        <div class="qt-label">Gasto</div>
+      </div>
+      <div class="quick-type-btn" id="qt-saving">
+        <div class="qt-icon">💰</div>
+        <div class="qt-label">Ahorro</div>
+      </div>
+      <div class="quick-type-btn" id="qt-fijo">
+        <div class="qt-icon">📌</div>
+        <div class="qt-label">Gasto Fijo</div>
+      </div>
+    </div>
+  `);
+  document.getElementById('qt-income').onclick = () => { _typeSelected = 'income'; _accountSelected = 'efectivo'; openTxForm('income'); };
+  document.getElementById('qt-expense').onclick = () => { _typeSelected = 'expense'; _accountSelected = 'efectivo'; openTxForm('expense'); };
+  document.getElementById('qt-saving').onclick = () => { _typeSelected = 'saving'; _accountSelected = 'efectivo'; openTxForm('saving'); };
+  document.getElementById('qt-fijo').onclick = () => openFijoForm();
+}
+
+const TYPE_LABELS = { income: '💰 Ingreso', expense: '💸 Gasto', saving: '🏦 Ahorro' };
+const TYPE_TITLES = { income: ' Ingreso', expense: ' Gasto', saving: ' Ahorro' };
+
+function catsForType(type) {
+  if (type === 'income') return INCOME_CATS;
+  if (type === 'saving') return SAVING_CATS;
+  return EXPENSE_CATS;
+}
+
+function openTxForm(type, existing) {
+  modalMode = 'tx-' + type;
+  const cats = catsForType(type);
+  const today = new Date().toISOString().slice(0,10);
+  const t = existing || { amount:'', date: today, category: cats[0], account:'efectivo', notes:'' };
+  openModal(
+    (existing ? 'Editar' : 'Nuevo') + TYPE_TITLES[type],
+    `
+    <div class="form-group">
+      <label class="form-label">Tipo de registro</label>
+      <div class="tab-switcher">
+        <div class="tab-switch-btn ${type==='income'?'active':''}" id="sw-income" onclick="switchType('income')">${TYPE_LABELS.income}</div>
+        <div class="tab-switch-btn ${type==='expense'?'active':''}" id="sw-expense" onclick="switchType('expense')">${TYPE_LABELS.expense}</div>
+        <div class="tab-switch-btn ${type==='saving'?'active':''}" id="sw-saving" onclick="switchType('saving')">${TYPE_LABELS.saving}</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Monto *</label>
+        <input class="form-input" type="number" id="f-amount" placeholder="0" value="${t.amount}" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha *</label>
+        <input class="form-input" type="date" id="f-date" value="${t.date}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoría *</label>
+      <select class="form-input" id="f-category">
+        ${cats.map(c => `<option ${c===t.category?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tipo de cuenta *</label>
+      <div class="tab-switcher">
+        <div class="tab-switch-btn ${t.account==='efectivo'?'active':''}" id="sw-cash" onclick="switchAccount('efectivo')">💵 Efectivo</div>
+        <div class="tab-switch-btn ${t.account==='transfer'?'active':''}" id="sw-bank" onclick="switchAccount('transfer')">🏦 Transferencia</div>
+      </div>
+    </div>
+    <div class="form-group" id="notes-group">
+      <label class="form-label">Descripción (opcional)</label>
+      <input class="form-input" type="text" id="f-notes" placeholder="Sin descripción" value="${t.notes||''}">
+    </div>
+    <button class="btn-primary" onclick="saveTxForm('${type}', '${existing?.id||''}')">
+      ${existing ? 'Guardar cambios' : 'Agregar'}
+    </button>
+  `);
+}
+
+let _accountSelected = 'efectivo';
+function switchAccount(acc) {
+  _accountSelected = acc;
+  document.querySelectorAll('#sw-cash, #sw-bank').forEach(el => el.classList.remove('active'));
+  document.getElementById(acc === 'efectivo' ? 'sw-cash' : 'sw-bank').classList.add('active');
+}
+
+let _typeSelected = 'income';
+function switchType(type) {
+  _typeSelected = type;
+  document.querySelectorAll('#sw-income, #sw-expense, #sw-saving').forEach(el => el.classList.remove('active'));
+  document.getElementById('sw-' + type).classList.add('active');
+  // Update categories
+  const cats = catsForType(type);
+  const sel = document.getElementById('f-category');
+  sel.innerHTML = cats.map(c => `<option>${c}</option>`).join('');
+}
+
+async function saveTxForm(type, existingId) {
+  const amount = parseFloat(document.getElementById('f-amount').value);
+  const date = document.getElementById('f-date').value;
+  const category = document.getElementById('f-category').value;
+  const account = _accountSelected;
+  const notesEl = document.getElementById('f-notes');
+  const notes = notesEl && notesEl.value.trim() ? notesEl.value.trim() : 'Sin descripción';
+
+  if (!amount || amount <= 0) { showToast('⚠ Ingresa un monto válido'); return; }
+  if (!date) { showToast('⚠ Ingresa la fecha'); return; }
+  const finalType = _typeSelected || type;
+
+  const tx = { id: existingId || uid(), type: finalType, amount, date, category, account, notes };
+  try {
+    await saveTransaction(tx);
+    closeModal();
+    showToast(existingId ? '✏️ Transacción actualizada' : '✅ Transacción guardada');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error guardando transacción:', e);
+    showToast('❌ No se pudo guardar. Intenta de nuevo.');
+  }
+}
+
+function openEditTx(id) {
+  const tx = transactions.find(t => t.id === id);
+  if (!tx) return;
+  _typeSelected = tx.type;
+  _accountSelected = tx.account;
+  openTxForm(tx.type, tx);
+}
+
+async function confirmDeleteTx(id) {
+  if (!(await appConfirm('¿Eliminar esta transacción? Esta acción no se puede deshacer.'))) return;
+  try {
+    await deleteTransaction(id);
+    showToast('🗑 Eliminado');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error eliminando transacción:', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
+}
+
+function openFijoForm(existing) {
+  const f = existing || { name:'', amount:'', category: FIJO_CATS[0], dias: 30 };
+  openModal((existing ? 'Editar' : 'Nuevo') + ' Gasto Fijo', `
+    <div class="form-group">
+      <label class="form-label">Nombre / Descripción *</label>
+      <input class="form-input" type="text" id="ff-name" placeholder="Ej: Arriendo" value="${f.name}">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Monto mensual *</label>
+        <input class="form-input" type="number" id="ff-amount" placeholder="0" value="${f.amount}" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Días elegibles *</label>
+        <input class="form-input" type="number" id="ff-dias" placeholder="Ej: 30" value="${f.dias || ''}" min="1">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoría *</label>
+      <select class="form-input" id="ff-category">
+        ${FIJO_CATS.map(c => `<option ${c===f.category?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn-primary" onclick="saveFijoForm('${existing?.id||''}')">
+      ${existing ? 'Guardar cambios' : 'Agregar'}
+    </button>
+  `);
+}
+
+async function saveFijoForm(existingId) {
+  const name = document.getElementById('ff-name').value.trim();
+  const amount = parseFloat(document.getElementById('ff-amount').value);
+  const dias = parseInt(document.getElementById('ff-dias').value);
+  const category = document.getElementById('ff-category').value;
+  if (!name) { showToast('⚠ Ingresa un nombre'); return; }
+  if (!amount || amount <= 0) { showToast('⚠ Ingresa un monto válido'); return; }
+  if (!dias || dias <= 0) { showToast('⚠ Ingresa los días elegibles'); return; }
+
+  const fijo = { id: existingId || uid(), name, amount, category, dias };
+  try {
+    await saveFijo(fijo);
+    closeModal();
+    showToast(existingId ? '✏️ Gasto fijo actualizado' : '✅ Gasto fijo guardado');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error guardando gasto fijo:', e);
+    showToast('❌ No se pudo guardar. Intenta de nuevo.');
+  }
+}
+
+function openEditFijo(id) {
+  const f = fijos.find(x => x.id === id);
+  if (!f) return;
+  openFijoForm(f);
+}
+
+async function confirmDeleteFijo(id) {
+  if (!(await appConfirm('¿Eliminar este gasto fijo? Esta acción no se puede deshacer.'))) return;
+  try {
+    await deleteFijo(id);
+    showToast('🗑 Eliminado');
+    renderFijos();
+  } catch (e) {
+    console.error('Error eliminando gasto fijo:', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   MODAL: CONCILIACIÓN DE SALDO
+───────────────────────────────────────────────────────── */
+let _reconAccount = 'efectivo';
+
+function openReconciliationModal(account) {
+  _reconAccount = account || 'efectivo';
+  modalMode = 'recon';
+  const today = new Date().toISOString().slice(0,10);
+  openModal('Conciliar Saldo', `
+    <div class="form-group">
+      <label class="form-label">Cuenta a conciliar</label>
+      <div class="tab-switcher">
+        <div class="tab-switch-btn ${_reconAccount==='efectivo'?'active':''}" id="rsw-cash" onclick="switchReconAccount('efectivo')">💵 Efectivo</div>
+        <div class="tab-switch-btn ${_reconAccount==='transfer'?'active':''}" id="rsw-bank" onclick="switchReconAccount('transfer')">💳 Digital</div>
+      </div>
+    </div>
+    <div class="recon-prev-box">
+      <span class="rp-label">Saldo anterior registrado</span>
+      <span class="rp-val" id="rp-prev-val">$0</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nuevo saldo real *</label>
+      <input class="form-input" type="number" id="rf-amount" placeholder="0" min="0" oninput="updateReconPreview()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fecha *</label>
+      <input class="form-input" type="date" id="rf-date" value="${today}">
+    </div>
+    <div class="recon-diff-preview" id="rf-preview">
+      <div class="rd-label">Diferencia / Total hecho</div>
+      <div class="rd-val" id="rf-preview-val">$0</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nota (opcional)</label>
+      <input class="form-input" type="text" id="rf-notes" placeholder="Ej: Corte de caja del mes">
+    </div>
+    <button class="btn-primary" onclick="saveReconciliationForm()">Guardar conciliación</button>
+  `);
+  updateReconPreview();
+}
+
+function switchReconAccount(account) {
+  _reconAccount = account;
+  document.querySelectorAll('#rsw-cash, #rsw-bank').forEach(el => el.classList.remove('active'));
+  document.getElementById(account === 'efectivo' ? 'rsw-cash' : 'rsw-bank').classList.add('active');
+  updateReconPreview();
+}
+
+function updateReconPreview() {
+  const prevVal = document.getElementById('rp-prev-val');
+  const previewBox = document.getElementById('rf-preview');
+  const previewVal = document.getElementById('rf-preview-val');
+  if (!prevVal || !previewBox || !previewVal) return;
+
+  const previous = previousBalanceFor(_reconAccount);
+  prevVal.textContent = fmt(previous);
+
+  const amountEl = document.getElementById('rf-amount');
+  const amount = parseFloat(amountEl.value);
+  if (isNaN(amount)) {
+    previewBox.className = 'recon-diff-preview';
+    previewVal.textContent = '$0';
+    return;
+  }
+  const diff = amount - previous;
+  previewBox.className = 'recon-diff-preview ' + (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : ''));
+  previewVal.textContent = (diff >= 0 ? '+' : '') + fmt(diff);
+}
+
+async function saveReconciliationForm() {
+  const amount = parseFloat(document.getElementById('rf-amount').value);
+  const date = document.getElementById('rf-date').value;
+  const notes = document.getElementById('rf-notes').value.trim();
+  if (isNaN(amount) || amount < 0) { showToast('⚠ Ingresa el nuevo saldo real'); return; }
+  if (!date) { showToast('⚠ Ingresa la fecha'); return; }
+
+  const previousAmount = previousBalanceFor(_reconAccount);
+  const diff = amount - previousAmount;
+
+  const rec = {
+    id: uid(),
+    account: _reconAccount,
+    previousAmount,
+    amount,
+    diff,
+    date,
+    notes,
+    createdAt: Date.now()
+  };
+  try {
+    await saveBalanceRecord(rec);
+    closeModal();
+    showToast(`✅ Conciliado · Diferencia: ${diff >= 0 ? '+' : ''}${fmt(diff)}`);
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error guardando conciliación:', e);
+    showToast('❌ No se pudo guardar la conciliación. Intenta de nuevo.');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   EXPORT / IMPORT
+───────────────────────────────────────────────────────── */
+function exportJSON() {
+  const data = { version: 5, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  download(blob, 'kasa-backup-' + new Date().toISOString().slice(0,10) + '.json');
+  showToast('📦 JSON descargado');
+}
+
+function exportCSV() {
+  const headers = ['ID','Tipo','Monto','Fecha','Categoría','Cuenta','Notas'];
+  const rows = transactions.map(t => [
+    t.id, t.type, t.amount, t.date, t.category, t.account, t.notes || ''
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  download(blob, 'kasa-transacciones-' + new Date().toISOString().slice(0,10) + '.csv');
+  showToast('📊 CSV descargado');
+}
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+async function importJSON(file) {
+  const text = await file.text();
+  try {
+    const data = JSON.parse(text);
+    if (!data.transactions) throw new Error('Formato inválido');
+    const ok = await appConfirm(
+      `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos y ${(data.balances||[]).length} conciliaciones? Esto reemplazará los datos actuales.`,
+      'Importar'
+    );
+    if (!ok) return;
+    transactions = data.transactions;
+    fijos = data.fijos || [];
+    balances = data.balances || [];
+    patrimonio = data.patrimonio || [];
+    await Promise.all(transactions.map(t => dbPut('transactions', t)));
+    await Promise.all(fijos.map(f => dbPut('fijos', f)));
+    await Promise.all(balances.map(b => dbPut('balances', b)));
+    await Promise.all(patrimonio.map(p => dbPut('patrimonio', p)));
+    showToast('📂 Datos importados exitosamente');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error importando:', e);
+    showToast('❌ Error al importar: archivo inválido');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   REPORTES FINANCIEROS (EEFF + ANÁLISIS)
+   Estado de Resultados + Balance General + métricas de
+   decisión + recomendaciones. Periodo = mes seleccionado.
+───────────────────────────────────────────────────────── */
+function renderExportar() {
+  const el = document.getElementById('report-period-label');
+  if (el) el.textContent = MONTHS_ES[currentMonth] + ' ' + currentYear;
+}
+
+function computeReport() {
+  const monthTx = transactions.filter(t => isSameMonth(t.date, currentMonth, currentYear));
+
+  // ── Estado de Resultados (flujo del periodo) ──
+  const ingresos = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const gastosVariables = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const gastosFijos = fijos.reduce((s, f) => s + f.amount, 0);
+  const gastosTotales = gastosVariables + gastosFijos;
+  const flujoNeto = ingresos - gastosTotales;
+  const ahorroPeriodo = monthTx.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
+
+  // ── Balance General (foto actual) ──
+  const pt = patrimonioTotals();
+  const activosItems = patrimonio.filter(p => p.kind === 'activo').map(p => ({ name: p.name, cat: p.category, amount: p.amount }));
+  if (pt.ahorros > 0) activosItems.push({ name: 'Ahorros acumulados', cat: 'Ahorros', amount: pt.ahorros });
+  const pasivosItems = patrimonio.filter(p => p.kind === 'pasivo').map(p => ({ name: p.name, cat: p.category, amount: p.amount }));
+
+  // ── Métricas de decisión ──
+  const endeudamiento = pt.activos > 0 ? (pt.pasivos / pt.activos) * 100 : 0;
+  const capacidadAhorro = ingresos > 0 ? (flujoNeto / ingresos) * 100 : 0;
+
+  const acc = accountTotals();
+  const saldoDisponible = Math.max(0, acc.cash) + Math.max(0, acc.digital);
+  const fondoEmergencia = pt.ahorros + saldoDisponible;
+  const gastoMensual = gastosTotales;
+  const mesesCobertura = gastoMensual > 0 ? fondoEmergencia / gastoMensual : 0;
+
+  return {
+    periodo: MONTHS_ES[currentMonth] + ' ' + currentYear,
+    ingresos, gastosVariables, gastosFijos, gastosTotales, flujoNeto, ahorroPeriodo,
+    activosItems, pasivosItems,
+    totalActivos: pt.activos, totalPasivos: pt.pasivos, patrimonioNeto: pt.neto, ahorros: pt.ahorros,
+    endeudamiento, capacidadAhorro, fondoEmergencia, mesesCobertura, gastoMensual, saldoDisponible
+  };
+}
+
+/* Diagnóstico corto + 3 acciones concretas según los umbrales. */
+function buildRecommendations(m) {
+  const acciones = [];
+  let puntos = 0, total = 0;
+
+  // Endeudamiento (ideal < 40%)
+  total++;
+  if (m.totalActivos === 0 && m.totalPasivos === 0) {
+    acciones.push('Registra tus activos (ahorros, inversiones, bienes) y pasivos (deudas, tarjetas) en la sección Patrimonio para completar tu Balance General.');
+  } else if (m.endeudamiento > 60) {
+    acciones.push(`Tu endeudamiento es alto (${m.endeudamiento.toFixed(0)}%). Prioriza pagar las deudas más caras (tarjetas de crédito) usando el método avalancha para reducir intereses.`);
+  } else if (m.endeudamiento > 40) {
+    acciones.push(`Endeudamiento moderado (${m.endeudamiento.toFixed(0)}%). Evita adquirir nuevas deudas y destina cualquier excedente a abonar capital.`);
+  } else {
+    puntos++;
+    acciones.push(`Buen nivel de endeudamiento (${m.endeudamiento.toFixed(0)}%). Mantén tus pasivos por debajo del 40% de tus activos.`);
+  }
+
+  // Capacidad de ahorro (ideal >= 20%)
+  total++;
+  if (m.ingresos === 0) {
+    acciones.push('Registra tus ingresos del mes para poder calcular tu capacidad de ahorro real.');
+  } else if (m.capacidadAhorro < 10) {
+    acciones.push(`Tu capacidad de ahorro es baja (${m.capacidadAhorro.toFixed(0)}%). Aplica la regla 50/30/20 y recorta gastos variables no esenciales hasta ahorrar al menos el 20%.`);
+  } else if (m.capacidadAhorro < 20) {
+    acciones.push(`Capacidad de ahorro de ${m.capacidadAhorro.toFixed(0)}%. Automatiza una transferencia a ahorro apenas recibas tus ingresos para llegar al 20%.`);
+  } else {
+    puntos++;
+    acciones.push(`Excelente capacidad de ahorro (${m.capacidadAhorro.toFixed(0)}%). Considera invertir el excedente para que tu dinero crezca por encima de la inflación.`);
+  }
+
+  // Fondo de emergencia (ideal >= 3-6 meses)
+  total++;
+  if (m.gastoMensual === 0) {
+    acciones.push('Registra tus gastos fijos y variables para estimar cuántos meses cubre tu fondo de emergencia.');
+  } else if (m.mesesCobertura < 3) {
+    acciones.push(`Tu fondo de emergencia cubre ${m.mesesCobertura.toFixed(1)} meses. Meta: acumula al menos 3 a 6 meses de gastos (${fmt(m.gastoMensual * 3)}) en una cuenta líquida.`);
+  } else if (m.mesesCobertura < 6) {
+    acciones.push(`Fondo de emergencia sólido (${m.mesesCobertura.toFixed(1)} meses). Llévalo hasta 6 meses para máxima tranquilidad.`);
+  } else {
+    puntos++;
+    acciones.push(`Fondo de emergencia robusto (${m.mesesCobertura.toFixed(1)} meses de cobertura). Ya puedes destinar nuevo ahorro a inversión.`);
+  }
+
+  const ratio = total > 0 ? puntos / total : 0;
+  let estado, color, mensaje;
+  if (m.ingresos === 0 && m.totalActivos === 0) {
+    estado = 'Datos insuficientes'; color = '#5a5e6a';
+    mensaje = 'Registra ingresos, gastos y tu patrimonio para obtener un diagnóstico completo de tu salud financiera.';
+  } else if (ratio >= 0.99) {
+    estado = 'Salud financiera excelente'; color = '#2e9e63';
+    mensaje = 'Tus finanzas están bajo control: bajo endeudamiento, buen ahorro y un fondo de emergencia adecuado. Enfócate en hacer crecer tu patrimonio.';
+  } else if (ratio >= 0.5) {
+    estado = 'Salud financiera aceptable'; color = '#b07020';
+    mensaje = 'Vas por buen camino, pero hay áreas por reforzar. Aplica las acciones sugeridas para fortalecer tu posición.';
+  } else {
+    estado = 'Requiere atención'; color = '#c23a3a';
+    mensaje = 'Tus finanzas muestran señales de alerta. Prioriza reducir deudas, aumentar tu ahorro y construir tu fondo de emergencia.';
+  }
+  return { estado, color, mensaje, acciones };
+}
+
+/* Documento HTML imprimible (papel A4) — listo para "Guardar como PDF". */
+function generateReportHTML() {
+  const m = computeReport();
+  const rec = buildRecommendations(m);
+  const hoy = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const rowsActivos = m.activosItems.length
+    ? m.activosItems.map(a => `<tr><td>${a.name}<span class="cat">${a.cat}</span></td><td class="num pos">${fmt(a.amount)}</td></tr>`).join('')
+    : '<tr><td class="muted">Sin activos registrados</td><td class="num">—</td></tr>';
+  const rowsPasivos = m.pasivosItems.length
+    ? m.pasivosItems.map(p => `<tr><td>${p.name}<span class="cat">${p.cat}</span></td><td class="num neg">${fmt(p.amount)}</td></tr>`).join('')
+    : '<tr><td class="muted">Sin pasivos registrados</td><td class="num">—</td></tr>';
+
+  const metricCard = (label, value, hint, color) => `
+    <div class="metric">
+      <div class="m-label">${label}</div>
+      <div class="m-val" style="color:${color}">${value}</div>
+      <div class="m-hint">${hint}</div>
+    </div>`;
+
+  const endColor = m.endeudamiento > 60 ? '#c23a3a' : (m.endeudamiento > 40 ? '#b07020' : '#2e9e63');
+  const ahoColor = m.capacidadAhorro < 10 ? '#c23a3a' : (m.capacidadAhorro < 20 ? '#b07020' : '#2e9e63');
+  const fonColor = m.mesesCobertura < 3 ? '#c23a3a' : (m.mesesCobertura < 6 ? '#b07020' : '#2e9e63');
+
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Kasa · Estados Financieros ${m.periodo}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:#fff;padding:32px 28px;line-height:1.4}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f1117;padding-bottom:14px;margin-bottom:22px}
+  .brand{font-size:26px;font-weight:800;letter-spacing:-.5px}
+  .brand .k{color:#8bbb00}
+  .brand small{display:block;font-size:12px;font-weight:400;color:#666;letter-spacing:0}
+  .meta{text-align:right;font-size:12px;color:#555}
+  .meta strong{font-size:14px;color:#111}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.5px;margin:26px 0 10px;padding-bottom:5px;border-bottom:1.5px solid #ddd;color:#0f1117}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:7px 4px;border-bottom:1px solid #eee;vertical-align:top}
+  .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+  .pos{color:#2e9e63}.neg{color:#c23a3a}
+  .cat{display:block;font-size:10.5px;color:#999;font-weight:400}
+  .total td{border-top:2px solid #0f1117;border-bottom:none;font-weight:800;font-size:14px;padding-top:9px}
+  .sub td{font-weight:700;background:#f7f7f4}
+  .muted{color:#999;font-style:italic}
+  .cols{display:flex;gap:26px}.cols>div{flex:1}
+  .metrics{display:flex;gap:12px;margin-top:6px}
+  .metric{flex:1;border:1px solid #e3e3dd;border-radius:10px;padding:12px 12px}
+  .m-label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.3px}
+  .m-val{font-size:24px;font-weight:800;margin:3px 0}
+  .m-hint{font-size:10.5px;color:#888}
+  .diag{border-left:5px solid ${rec.color};background:#faf9f6;border-radius:8px;padding:14px 16px;margin-top:8px}
+  .diag .estado{font-size:16px;font-weight:800;color:${rec.color}}
+  .diag p{font-size:12.5px;color:#444;margin-top:4px}
+  ol{margin:10px 0 0 18px}ol li{font-size:12.5px;margin-bottom:7px;padding-left:3px}
+  .foot{margin-top:26px;padding-top:12px;border-top:1px solid #eee;font-size:10.5px;color:#aaa;text-align:center}
+  @media print{body{padding:0}@page{margin:14mm}}
+</style></head><body>
+  <div class="head">
+    <div class="brand"><span class="k">K</span>asa<small>Finanzas Personales</small></div>
+    <div class="meta"><strong>Estados Financieros Personales</strong><br>Periodo: ${m.periodo}<br>Generado: ${hoy}</div>
+  </div>
+
+  <h2>1 · Estado de Resultados</h2>
+  <table>
+    <tr class="sub"><td>Ingresos</td><td class="num"></td></tr>
+    <tr><td>Ingresos totales</td><td class="num pos">${fmt(m.ingresos)}</td></tr>
+    <tr class="sub"><td>Egresos</td><td class="num"></td></tr>
+    <tr><td>(−) Gastos fijos</td><td class="num neg">${fmt(m.gastosFijos)}</td></tr>
+    <tr><td>(−) Gastos variables</td><td class="num neg">${fmt(m.gastosVariables)}</td></tr>
+    <tr><td>Total egresos</td><td class="num neg">${fmt(m.gastosTotales)}</td></tr>
+    <tr class="total"><td>= Flujo Neto del periodo</td><td class="num" style="color:${m.flujoNeto>=0?'#2e9e63':'#c23a3a'}">${fmt(m.flujoNeto)}</td></tr>
+  </table>
+  <table style="margin-top:6px"><tr><td class="muted" style="border:none">Memo · Ahorro registrado en el periodo</td><td class="num" style="border:none;color:#3a8fff">${fmt(m.ahorroPeriodo)}</td></tr></table>
+
+  <h2>2 · Balance General</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr class="sub"><td>Activos</td><td class="num"></td></tr>
+        ${rowsActivos}
+        <tr class="total"><td>Total Activos</td><td class="num pos">${fmt(m.totalActivos)}</td></tr>
+      </table>
+    </div>
+    <div>
+      <table>
+        <tr class="sub"><td>Pasivos</td><td class="num"></td></tr>
+        ${rowsPasivos}
+        <tr class="total"><td>Total Pasivos</td><td class="num neg">${fmt(m.totalPasivos)}</td></tr>
+      </table>
+    </div>
+  </div>
+  <table style="margin-top:8px">
+    <tr class="total"><td>Patrimonio Neto (Activos − Pasivos)</td><td class="num" style="color:${m.patrimonioNeto>=0?'#2e9e63':'#c23a3a'}">${fmt(m.patrimonioNeto)}</td></tr>
+  </table>
+
+  <h2>3 · Análisis Financiero</h2>
+  <div class="metrics">
+    ${metricCard('Nivel de Endeudamiento', m.endeudamiento.toFixed(1) + '%', 'Pasivos ÷ Activos · ideal &lt; 40%', endColor)}
+    ${metricCard('Capacidad de Ahorro', m.capacidadAhorro.toFixed(1) + '%', 'Flujo Neto ÷ Ingresos · ideal ≥ 20%', ahoColor)}
+    ${metricCard('Fondo de Emergencia', m.mesesCobertura.toFixed(1) + ' meses', 'Cobertura · ideal 3 a 6 meses', fonColor)}
+  </div>
+
+  <h2>4 · Diagnóstico y Recomendaciones</h2>
+  <div class="diag">
+    <div class="estado">${rec.estado}</div>
+    <p>${rec.mensaje}</p>
+  </div>
+  <strong style="display:block;font-size:12.5px;margin-top:14px">3 acciones concretas:</strong>
+  <ol>${rec.acciones.map(a => `<li>${a}</li>`).join('')}</ol>
+
+  <div class="foot">Generado por Kasa · Este documento es una estimación con fines de organización personal, no constituye asesoría financiera profesional.</div>
+</body></html>`;
+}
+
+function openReportPDF() {
+  if (!transactions.length && !patrimonio.length && !fijos.length) {
+    showToast('⚠ Registra algunos datos antes de generar el reporte');
+    return;
+  }
+  const html = generateReportHTML();
+  const w = window.open('', '_blank');
+  if (w && w.document) {
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    const doPrint = () => { try { w.focus(); w.print(); } catch (e) {} };
+    w.onload = () => setTimeout(doPrint, 350);
+    setTimeout(doPrint, 800); // respaldo si onload no dispara
+    showToast('🧾 Usa "Guardar como PDF" en el diálogo de impresión');
+  } else {
+    // Popup bloqueado → imprimir vía iframe oculto dentro de la app.
+    printViaIframe(html);
+    showToast('🧾 Preparando reporte para imprimir/guardar PDF');
+  }
+}
+
+function printViaIframe(html) {
+  let ifr = document.getElementById('kasa-print-frame');
+  if (ifr) ifr.remove();
+  ifr = document.createElement('iframe');
+  ifr.id = 'kasa-print-frame';
+  ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(ifr);
+  const doc = ifr.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  ifr.onload = () => setTimeout(() => { try { ifr.contentWindow.focus(); ifr.contentWindow.print(); } catch (e) {} }, 400);
+}
+
+/* EEFF completo en CSV (abre en Excel/Sheets). */
+function exportReportCSV() {
+  const m = computeReport();
+  const rec = buildRecommendations(m);
+  const rows = [];
+  const push = (a, b) => rows.push([a, b]);
+
+  push('KASA · ESTADOS FINANCIEROS PERSONALES', '');
+  push('Periodo', m.periodo);
+  push('Generado', new Date().toISOString().slice(0, 10));
+  push('', '');
+  push('ESTADO DE RESULTADOS', 'Monto (COP)');
+  push('Ingresos totales', m.ingresos);
+  push('Gastos fijos', m.gastosFijos);
+  push('Gastos variables', m.gastosVariables);
+  push('Total egresos', m.gastosTotales);
+  push('Flujo Neto del periodo', m.flujoNeto);
+  push('Ahorro registrado en el periodo', m.ahorroPeriodo);
+  push('', '');
+  push('BALANCE GENERAL', 'Monto (COP)');
+  push('-- Activos --', '');
+  m.activosItems.forEach(a => push(a.name + ' (' + a.cat + ')', a.amount));
+  push('Total Activos', m.totalActivos);
+  push('-- Pasivos --', '');
+  m.pasivosItems.forEach(p => push(p.name + ' (' + p.cat + ')', p.amount));
+  push('Total Pasivos', m.totalPasivos);
+  push('Patrimonio Neto', m.patrimonioNeto);
+  push('', '');
+  push('ANÁLISIS FINANCIERO', 'Valor');
+  push('Nivel de Endeudamiento (%)', m.endeudamiento.toFixed(1));
+  push('Capacidad de Ahorro (%)', m.capacidadAhorro.toFixed(1));
+  push('Fondo de Emergencia (meses)', m.mesesCobertura.toFixed(1));
+  push('', '');
+  push('DIAGNÓSTICO', rec.estado);
+  push('Resumen', rec.mensaje);
+  rec.acciones.forEach((a, i) => push('Acción ' + (i + 1), a));
+
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  download(blob, 'kasa-eeff-' + new Date().toISOString().slice(0, 10) + '.csv');
+  showToast('📈 Reporte EEFF (CSV) descargado');
+}
+
+/* ─────────────────────────────────────────────────────────
+   THEME
+───────────────────────────────────────────────────────── */
+let isDark = safeLSGet('kasa_theme') === 'dark';
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  const icon = isDark ? '☀️' : '🌙';
+  const txt = isDark ? 'Modo claro' : 'Modo oscuro';
+  document.getElementById('theme-icon-sidebar').textContent = icon;
+  document.getElementById('theme-text-sidebar').textContent = txt;
+  document.getElementById('theme-toggle-mobile').textContent = icon;
+}
+
+function toggleTheme() {
+  isDark = !isDark;
+  safeLSSet('kasa_theme', isDark ? 'dark' : 'light');
+  applyTheme();
+}
+
+/* ─────────────────────────────────────────────────────────
+   TOAST
+───────────────────────────────────────────────────────── */
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+/* ─────────────────────────────────────────────────────────
+   SIDEBAR
+───────────────────────────────────────────────────────── */
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('mobile-open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+/* ─────────────────────────────────────────────────────────
+   EVENT LISTENERS
+───────────────────────────────────────────────────────── */
+// Navigation
+document.querySelectorAll('.nav-item, .bnav-item').forEach(el => {
+  el.addEventListener('click', () => goToPage(el.dataset.page));
+});
+
+// FAB & add buttons
+document.getElementById('fab').addEventListener('click', openFabModal);
+document.getElementById('add-btn-top').addEventListener('click', openFabModal);
+document.getElementById('add-btn-tx').addEventListener('click', () => {
+  _typeSelected = 'expense'; _accountSelected = 'efectivo';
+  openTxForm('expense');
+});
+document.getElementById('add-btn-fijo').addEventListener('click', () => {
+  openFijoForm();
+});
+document.getElementById('add-btn-ahorro').addEventListener('click', () => {
+  _typeSelected = 'saving'; _accountSelected = 'efectivo';
+  openTxForm('saving');
+});
+document.getElementById('add-btn-conciliacion').addEventListener('click', () => {
+  openReconciliationModal('efectivo');
+});
+document.getElementById('add-btn-patrimonio').addEventListener('click', () => {
+  openPatrimonioForm(null, 'activo');
+});
+
+// Modal close
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// Theme
+document.getElementById('theme-toggle-sidebar').addEventListener('click', toggleTheme);
+document.getElementById('theme-toggle-mobile').addEventListener('click', toggleTheme);
+
+// Month nav
+document.getElementById('prev-month').addEventListener('click', () => {
+  currentMonth--;
+  if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  renderPage(currentPage);
+});
+document.getElementById('next-month').addEventListener('click', () => {
+  currentMonth++;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  renderPage(currentPage);
+});
+
+// Hamburgers
+['hamburger','hamburger2','hamburger3','hamburger4','hamburger5','hamburger6','hamburger7','hamburger8'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('click', openSidebar);
+});
+document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
+
+// Export
+document.getElementById('export-json').addEventListener('click', exportJSON);
+document.getElementById('export-csv').addEventListener('click', exportCSV);
+document.getElementById('report-pdf').addEventListener('click', openReportPDF);
+document.getElementById('report-csv').addEventListener('click', exportReportCSV);
+document.getElementById('import-file').addEventListener('change', e => {
+  if (e.target.files[0]) importJSON(e.target.files[0]);
+});
+
+/* ─────────────────────────────────────────────────────────
+   SERVICE WORKER REGISTRATION
+───────────────────────────────────────────────────────── */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(() => {
+    console.log('✅ Service Worker registrado');
+  }).catch(err => console.log('SW no disponible:', err.message));
+}
+
+/* ─────────────────────────────────────────────────────────
+   INIT
+───────────────────────────────────────────────────────── */
+async function init() {
+  applyTheme();
+  try {
+    await initDB();
+  } catch (e) {
+    console.warn('⚠ No se pudo inicializar IndexedDB, se usará almacenamiento alterno:', e);
+    db = null;
+  }
+  try {
+    await loadData();
+  } catch (e) {
+    console.warn('⚠ No se pudieron cargar los datos guardados:', e);
+    transactions = transactions.length ? transactions : [];
+    fijos = fijos.length ? fijos : [];
+    balances = balances.length ? balances : [];
+  }
+  renderDashboard();
+
+  // init hidden state for form
+  _typeSelected = 'expense';
+  _accountSelected = 'efectivo';
+
+  // Accesos directos del manifest (?page=exportar / ?action=add)
+  try {
+    const params = new URLSearchParams(location.search);
+    const page = params.get('page');
+    if (page && document.getElementById('page-' + page)) goToPage(page);
+    if (params.get('action') === 'add') openFabModal();
+  } catch (e) { /* sin params */ }
+}
+
+init();
+</script>
+</body>
+</html>
