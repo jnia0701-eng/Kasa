@@ -290,6 +290,8 @@ a{text-decoration:none;color:inherit}
 [data-theme="dark"] .badge.transfer{color:var(--accent)}
 .badge.paid{background:rgba(75,218,142,.15);color:var(--ok)}
 .badge.unpaid{background:rgba(255,179,71,.15);color:#b07020}
+.badge.overdue{background:rgba(255,75,75,.15);color:#c23a3a;font-weight:600}
+[data-theme="dark"] .badge.overdue{color:#ff7a7a}
 [data-theme="dark"] .badge.unpaid{color:var(--warn)}
 
 /* Filters */
@@ -1236,31 +1238,96 @@ function fijosMensualRequerido() {
   return fijos.reduce((s, f) => s + fijoMensualProrrateado(f), 0);
 }
 
-/* Identificador del ciclo vigente, según el mes seleccionado.
-   Permite marcar el pago una vez por ciclo (un SOAT se paga 1 vez al año). */
-function periodoActual(f, month, year) {
-  const m = (month == null) ? currentMonth : month;
-  const y = (year == null) ? currentYear : year;
+/* ────────────────────────────────────────
+   VENCIMIENTOS
+   El estado ya no depende del mes calendario sino de la FECHA DE
+   VENCIMIENTO. Así, pagar el arriendo el 25 de junio no lo deja
+   pendiente el 1 de julio (vence el 25), y un SOAT pagado en
+   noviembre vence 12 meses después, no el 1 de enero.
+
+   · Mensual  → anclado al día de pago del calendario.
+   · > 1 mes  → anclado al aniversario del último pago real.
+──────────────────────────────────────────── */
+
+// Días de anticipación con que se avisa, según la periodicidad.
+function diasAviso(f) {
   const meses = mesesCiclo(f);
-  if (meses <= 1) return y + '-' + String(m + 1).padStart(2, '0');
-  if (meses < 12) return y + '-C' + meses + '-' + Math.floor(m / meses);
-  if (meses === 12) return String(y);
-  const bloque = meses / 12;
-  return 'B' + (Math.floor(y / bloque) * bloque);
+  if (meses <= 1) return 5;
+  if (meses < 12) return 15;
+  return 30;
 }
 
-function pagoDeFijo(f, periodo) {
-  const per = periodo || periodoActual(f);
-  return (f.pagos || []).find(x => x.periodo === per) || null;
+function hoyLocal() {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
 }
-function fijoEstaPagado(f) { return !!pagoDeFijo(f); }
 
-// Fecha de pago del ciclo vigente (día elegido del mes).
-function fechaPagoFijo(f) {
-  const dia = Math.min(Math.max(parseInt(f.diaPago) || 1, 1), 31);
-  const ultimo = new Date(currentYear, currentMonth + 1, 0).getDate();
-  return new Date(currentYear, currentMonth, Math.min(dia, ultimo));
+// Suma meses respetando el día (31 de enero + 1 mes = 28/29 de febrero).
+function sumarMeses(fecha, meses, diaPreferido) {
+  const y = fecha.getFullYear(), m = fecha.getMonth();
+  const dia = diaPreferido || fecha.getDate();
+  const ultimo = new Date(y, m + meses + 1, 0).getDate();
+  return new Date(y, m + meses, Math.min(dia, ultimo));
 }
+
+function diaPagoDe(f) {
+  return Math.min(Math.max(parseInt(f.diaPago) || 1, 1), 31);
+}
+
+// El pago más reciente registrado.
+function ultimoPagoFijo(f) {
+  const pagos = (f.pagos || []).slice()
+    .sort((a, b) => parseLocalDate(b.fecha) - parseLocalDate(a.fecha));
+  return pagos.length ? pagos[0] : null;
+}
+
+/* Próxima fecha de vencimiento.
+   Se deriva del historial ya guardado, por eso no hace falta migrar
+   los pagos hechos con la versión anterior. */
+function proximoVencimiento(f) {
+  const meses = mesesCiclo(f);
+  const dia = diaPagoDe(f);
+  const ultimo = ultimoPagoFijo(f);
+
+  if (ultimo) {
+    const base = parseLocalDate(ultimo.fecha);
+    // Mensual: el día de pago del mes siguiente. Mayor: aniversario.
+    return meses <= 1 ? sumarMeses(base, 1, dia) : sumarMeses(base, meses);
+  }
+
+  // Sin pagos: el próximo día de pago desde hoy.
+  const hoy = hoyLocal();
+  const ultDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+  let venc = new Date(hoy.getFullYear(), hoy.getMonth(), Math.min(dia, ultDia));
+  if (venc < hoy) venc = sumarMeses(venc, meses <= 1 ? 1 : meses, dia);
+  return venc;
+}
+
+function diasHastaVencimiento(f) {
+  const ms = proximoVencimiento(f) - hoyLocal();
+  return Math.round(ms / 86400000);
+}
+
+/* Estado del gasto fijo:
+   'pagado'   → al día, fuera de la ventana de aviso
+   'porPagar' → dentro de la ventana de aviso
+   'vencido'  → se pasó la fecha y sigue sin pagarse */
+function estadoFijo(f) {
+  const dias = diasHastaVencimiento(f);
+  if (dias < 0) return 'vencido';
+  if (dias <= diasAviso(f)) return 'porPagar';
+  return 'pagado';
+}
+
+function fijoEstaPagado(f) { return estadoFijo(f) === 'pagado'; }
+
+// Se puede registrar un pago salvo que ya esté al día.
+function fijoSePuedePagar(f) { return estadoFijo(f) !== 'pagado'; }
+
+function pagoDeFijo(f) { return ultimoPagoFijo(f); }
+
+// Fecha que se asigna al movimiento generado al pagar: hoy.
+function fechaPagoFijo(f) { return hoyLocal(); }
 
 function fechaCorta(iso) {
   const d = parseLocalDate(iso);
@@ -1787,13 +1854,16 @@ function renderFijos() {
       : 'Suma de tus gastos fijos mensuales';
   }
 
-  // Pendiente por pagar en el ciclo vigente
-  const pendientes = fijos.filter(f => !fijoEstaPagado(f));
+  // Por pagar / vencidos según la fecha de vencimiento
+  const vencidos = fijos.filter(f => estadoFijo(f) === 'vencido');
+  const porPagar = fijos.filter(f => estadoFijo(f) === 'porPagar');
+  const pendientes = vencidos.concat(porPagar);
   const pendienteEl = document.getElementById('fijos-pendiente-val');
   if (pendienteEl) {
     pendienteEl.textContent = fmt(pendientes.reduce((s,f) => s+f.amount, 0));
-    document.getElementById('fijos-pendiente-sub').textContent =
-      `${pendientes.length} de ${fijos.length} sin pagar`;
+    document.getElementById('fijos-pendiente-sub').textContent = vencidos.length
+      ? `🔴 ${vencidos.length} vencido(s) · ${porPagar.length} por vencer`
+      : (porPagar.length ? `${porPagar.length} por vencer pronto` : 'Todo al día ✓');
   }
 
   if (!fijos.length) {
@@ -1801,22 +1871,39 @@ function renderFijos() {
     return;
   }
 
-  // Ordena: primero lo pendiente, luego por día de pago.
-  const ordenados = [...fijos].sort((a,b) => {
-    const pa = fijoEstaPagado(a) ? 1 : 0, pb = fijoEstaPagado(b) ? 1 : 0;
-    return pa - pb || (a.diaPago||1) - (b.diaPago||1);
-  });
+  // Ordena: vencidos primero, luego por vencer, y dentro de cada grupo
+  // lo que vence antes.
+  const PRIO = { vencido: 0, porPagar: 1, pagado: 2 };
+  const ordenados = [...fijos].sort((a,b) =>
+    PRIO[estadoFijo(a)] - PRIO[estadoFijo(b)] ||
+    diasHastaVencimiento(a) - diasHastaVencimiento(b)
+  );
 
   list.innerHTML = ordenados.map(f => {
     const per = periodicidadDe(f);
     const pago = pagoDeFijo(f);
     const mensual = fijoMensualProrrateado(f);
 
-    const chip = pago
-      ? `<button class="badge paid badge-btn" data-revert="${f.id}" title="Deshacer pago">
-           ✓ Pagado el ${fechaCorta(pago.fecha)}${pago.metodo === 'digital' ? ' · ' + esc(cuentaName(pago.cuentaId)) : ' · Efectivo'}
-         </button>`
-      : `<button class="badge unpaid badge-btn" data-pay="${f.id}">⏳ Pendiente por pagar</button>`;
+    const estado = estadoFijo(f);
+    const dias = diasHastaVencimiento(f);
+    const vence = fechaCorta(todayISO(proximoVencimiento(f)));
+
+    let chip;
+    if (estado === 'pagado') {
+      const via = pago ? (pago.metodo === 'digital' ? ' · ' + esc(cuentaName(pago.cuentaId)) : ' · Efectivo') : '';
+      chip = pago
+        ? `<button class="badge paid badge-btn" data-revert="${f.id}" title="Deshacer pago">
+             ✓ Pagado el ${fechaCorta(pago.fecha)}${via} · vence ${vence}
+           </button>`
+        : `<span class="badge paid">✓ Al día · vence ${vence}</span>`;
+    } else if (estado === 'porPagar') {
+      const txt = dias === 0 ? 'Vence hoy' : (dias === 1 ? 'Vence mañana' : `Por pagar en ${dias} días`);
+      chip = `<button class="badge unpaid badge-btn" data-pay="${f.id}">⏳ ${txt} · ${vence}</button>`;
+    } else {
+      const d = Math.abs(dias);
+      const txt = d === 1 ? 'Vencido hace 1 día' : `Vencido hace ${d} días`;
+      chip = `<button class="badge overdue badge-btn" data-pay="${f.id}">🔴 ${txt} · ${vence}</button>`;
+    }
 
     const sub = `${f.category} · ${per.label} · día ${f.diaPago || 1}`;
     const prorrateo = per.meses > 1
@@ -1885,7 +1972,7 @@ function openPagoFijoModal(id) {
     <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
       <div style="font-weight:600;font-size:.95rem">${esc(f.name)}</div>
       <div style="font-size:.8rem;color:var(--text2);margin-top:.15rem">
-        ${periodicidadDe(f).label} · día ${f.diaPago || 1}
+        ${periodicidadDe(f).label} · vence ${fechaCorta(todayISO(proximoVencimiento(f)))}
       </div>
       <div style="font-family:var(--font-head);font-weight:800;font-size:1.5rem;margin-top:.4rem">${fmt(f.amount)}</div>
     </div>
@@ -1914,11 +2001,11 @@ async function registrarPagoFijo(id, metodo, cuentaId) {
   if (_pagoEnCurso) return;               // evita duplicar el gasto con doble toque
   const f = fijos.find(x => x.id === id);
   if (!f) return;
-  if (fijoEstaPagado(f)) { showToast('⚠ Este gasto ya está pagado en este periodo'); return; }
+  if (!fijoSePuedePagar(f)) { showToast('⚠ Este gasto ya está al día'); return; }
   _pagoEnCurso = true;
 
   const fecha = todayISO(fechaPagoFijo(f));
-  const periodo = periodoActual(f);
+  const vence = todayISO(proximoVencimiento(f));
 
   try {
     // Transacción real: descuenta el saldo de efectivo o de la cuenta digital.
@@ -1931,7 +2018,7 @@ async function registrarPagoFijo(id, metodo, cuentaId) {
     await saveTransaction(tx);
 
     const actualizado = Object.assign({}, f, {
-      pagos: (f.pagos || []).concat([{ periodo, fecha, metodo, cuentaId: cuentaId || '', txId: tx.id }])
+      pagos: (f.pagos || []).concat([{ fecha, vencia: vence, metodo, cuentaId: cuentaId || '', txId: tx.id }])
     });
     await saveFijo(actualizado);
 
@@ -1956,7 +2043,7 @@ async function confirmRevertirPago(id) {
   try {
     if (pago.txId) await deleteTransaction(pago.txId);
     const actualizado = Object.assign({}, f, {
-      pagos: (f.pagos || []).filter(x => x.periodo !== pago.periodo)
+      pagos: (f.pagos || []).filter(x => x !== pago)
     });
     await saveFijo(actualizado);
     showToast('↩ Pago deshecho');
