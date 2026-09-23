@@ -2011,7 +2011,8 @@ function openPagoFijoModal(id) {
       <label class="form-label">Fecha del pago *</label>
       <input class="form-input" type="date" id="pg-fecha" value="${todayISO()}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
-        Si lo pagaste antes, corrige la fecha: el próximo vencimiento se calcula desde aquí.
+        Si lo pagaste antes, corrige la fecha: define el próximo vencimiento.
+        El descuento del saldo se registra siempre con fecha de hoy.
       </div>
     </div>
 
@@ -2060,6 +2061,10 @@ function openEditarPagoModal(id) {
     <div class="form-group">
       <label class="form-label">Fecha en que lo pagaste *</label>
       <input class="form-input" type="date" id="ep-fecha" value="${esc(pago.fecha)}">
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+        Solo recalcula el vencimiento. El movimiento sigue registrado el
+        ${pago.registradoEl ? fechaCorta(pago.registradoEl) : fechaCorta(pago.fecha)} y el acumulado no cambia.
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Pagado con *</label>
@@ -2103,12 +2108,13 @@ async function guardarEdicionPago(id) {
   const [metodo, cuentaId] = document.getElementById('ep-metodo').value.split(':');
 
   try {
-    // Sincroniza la transaccion asociada para que el saldo siga cuadrando.
+    /* Solo se sincronizan metodo y cuenta (de donde sale la plata).
+       La fecha del movimiento se deja intacta a proposito: cambiar la
+       fecha del pago reubica el vencimiento, no el historico contable. */
     if (pago.txId) {
       const tx = transactions.find(t => t.id === pago.txId);
       if (tx) {
         await saveTransaction(Object.assign({}, tx, {
-          date: fecha,
           account: metodo === 'digital' ? 'transfer' : 'efectivo',
           cuentaId: metodo === 'digital' ? (cuentaId || '') : ''
         }));
@@ -2135,23 +2141,27 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida) {
   if (!f) return;
   _pagoEnCurso = true;
 
-  // La fecha la elige el usuario (por defecto hoy); permite registrar
-  // pagos pasados y que el vencimiento se calcule desde ahi.
+  // Fecha real del pago: solo sirve de ancla para calcular el vencimiento.
   const fecha = fechaElegida || todayISO(fechaPagoFijo(f));
+  // Fecha contable: siempre HOY, para no alterar meses ya cerrados.
+  const fechaMovimiento = todayISO();
   const vence = todayISO(proximoVencimiento(f));
 
   try {
     // Transacción real: descuenta el saldo de efectivo o de la cuenta digital.
     const tx = {
-      id: uid(), type: 'expense', amount: f.amount, date: fecha,
+      id: uid(), type: 'expense', amount: f.amount, date: fechaMovimiento,
       category: f.category, account: metodo === 'digital' ? 'transfer' : 'efectivo',
       cuentaId: metodo === 'digital' ? cuentaId : '',
-      notes: 'Pago gasto fijo: ' + f.name
+      notes: 'Pago gasto fijo: ' + f.name + (fecha !== fechaMovimiento ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
     };
     await saveTransaction(tx);
 
     const actualizado = Object.assign({}, f, {
-      pagos: (f.pagos || []).concat([{ fecha, vencia: vence, metodo, cuentaId: cuentaId || '', txId: tx.id }])
+      pagos: (f.pagos || []).concat([{
+        fecha, vencia: vence, metodo, cuentaId: cuentaId || '',
+        txId: tx.id, registradoEl: fechaMovimiento
+      }])
     });
     await saveFijo(actualizado);
 
