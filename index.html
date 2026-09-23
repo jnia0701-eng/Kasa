@@ -1263,7 +1263,7 @@ function fechaPagoFijo(f) {
 }
 
 function fechaCorta(iso) {
-  const d = new Date(iso + 'T00:00:00');
+  const d = parseLocalDate(iso);
   return d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
@@ -1298,7 +1298,7 @@ const ACCOUNT_LABELS = { efectivo: 'Efectivo', transfer: 'Digital' };
 function lastReconciliation(account, cuentaId) {
   const arr = balances
     .filter(b => b.account === account && (cuentaId ? b.cuentaId === cuentaId : !b.cuentaId))
-    .sort((a, b) => new Date(b.date) - new Date(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+    .sort((a, b) => parseLocalDate(b.date) - parseLocalDate(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
   return arr.length ? arr[0] : null;
 }
 
@@ -1420,7 +1420,7 @@ function digitalBreakdown() {
 /* <option> de cuentas digitales para los formularios. */
 function cuentaOptionsHTML(selectedId) {
   const opts = cuentas.map(c =>
-    `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${c.name}</option>`
+    `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}</option>`
   ).join('');
   return `<option value="" ${!selectedId ? 'selected' : ''}>— Sin asignar —</option>` + opts;
 }
@@ -1545,8 +1545,36 @@ function initMoneyInputs(root) {
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+/* ── FECHAS EN HORA LOCAL ─────────────────────────────────
+   new Date('2026-09-01') se interpreta como UTC: en zonas con offset
+   negativo (Bogotá, UTC-5) retrocede al 31 de agosto. Eso desplazaba
+   los movimientos del día 1 al mes anterior. Aquí se parsea local.
+───────────────────────────────────────────────── */
+function parseLocalDate(str) {
+  if (!str) return new Date(NaN);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(str));
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(str);
+}
+
+/* Fecha 'YYYY-MM-DD' según el reloj local. toISOString() convierte a UTC
+   y después de las 19:00 en Bogotá devolvía el día siguiente. */
+function todayISO(d) {
+  const x = d || new Date();
+  const p = n => String(n).padStart(2, '0');
+  return x.getFullYear() + '-' + p(x.getMonth() + 1) + '-' + p(x.getDate());
+}
+
+/* Escapa texto del usuario antes de insertarlo con innerHTML o en un
+   atributo. Sin esto, un nombre con comillas truncaba el campo al
+   editarlo y uno con < rompía el render. */
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function isSameMonth(dateStr, month, year) {
-  const d = new Date(dateStr);
+  const d = parseLocalDate(dateStr);
   return d.getMonth() === month && d.getFullYear() === year;
 }
 
@@ -1631,7 +1659,7 @@ function renderDashboard() {
   }
 
   // Recent (last 5)
-  const sorted = [...transactions].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+  const sorted = [...transactions].sort((a,b) => parseLocalDate(b.date) - parseLocalDate(a.date)).slice(0, 5);
   const list = document.getElementById('recent-list');
   if (!sorted.length) {
     list.innerHTML = '<div class="empty"><div class="e-icon">📭</div>Sin movimientos aún. Toca + para agregar.</div>';
@@ -1650,7 +1678,7 @@ function renderDashCuentas() {
   card.style.display = 'block';
   const rows = bd.items.map(c => `
     <div class="rule-labels" style="margin-bottom:.4rem">
-      <span>${c.name}</span><strong>${fmt(c.balance)}</strong>
+      <span>${esc(c.name)}</span><strong>${fmt(c.balance)}</strong>
     </div>`).join('');
   const extra = Math.round(bd.sinAsignar) !== 0 ? `
     <div class="rule-labels" style="margin-bottom:.4rem;color:var(--text3)">
@@ -1690,7 +1718,7 @@ function renderTransactions() {
   else if (activeFilter === 'efectivo') filtered = filtered.filter(t => t.account === 'efectivo');
   else if (activeFilter === 'transfer') filtered = filtered.filter(t => t.account === 'transfer');
 
-  filtered.sort((a,b) => new Date(b.date) - new Date(a.date));
+  filtered.sort((a,b) => parseLocalDate(b.date) - parseLocalDate(a.date));
 
   const list = document.getElementById('tx-list');
   if (!filtered.length) {
@@ -1706,11 +1734,11 @@ function txItemHTML(t, showActions) {
   const isSaving = t.type === 'saving';
   const sign = isIncome ? '+' : (isSaving ? '↳' : '-');
   const icon = isIncome ? '↑' : (isSaving ? '💰' : '↓');
-  const d = new Date(t.date);
+  const d = parseLocalDate(t.date);
   const dateStr = d.toLocaleDateString('es-CO', {day:'2-digit', month:'short'});
   const accountBadge = t.account === 'efectivo'
     ? '<span class="badge efectivo">Efectivo</span>'
-    : `<span class="badge transfer">${t.cuentaId ? cuentaName(t.cuentaId) : 'Transferencia'}</span>`;
+    : `<span class="badge transfer">${esc(t.cuentaId ? cuentaName(t.cuentaId) : 'Transferencia')}</span>`;
   const actions = showActions ? `
     <div class="tx-actions">
       <button class="tx-btn edit" data-id="${t.id}" title="Editar">✏️</button>
@@ -1720,8 +1748,8 @@ function txItemHTML(t, showActions) {
     <div class="tx-item" data-id="${t.id}">
       <div class="tx-icon ${t.type}">${icon}</div>
       <div class="tx-info">
-        <div class="tx-cat">${t.category}</div>
-        <div class="tx-sub">${dateStr} · ${accountBadge}${t.notes ? ` · ${t.notes}` : ''}</div>
+        <div class="tx-cat">${esc(t.category)}</div>
+        <div class="tx-sub">${dateStr} · ${accountBadge}${t.notes ? ` · ${esc(t.notes)}` : ''}</div>
       </div>
       <div class="tx-amount ${t.type}">${sign}${fmt(t.amount)}</div>
       ${actions}
@@ -1786,7 +1814,7 @@ function renderFijos() {
 
     const chip = pago
       ? `<button class="badge paid badge-btn" data-revert="${f.id}" title="Deshacer pago">
-           ✓ Pagado el ${fechaCorta(pago.fecha)}${pago.metodo === 'digital' ? ' · ' + cuentaName(pago.cuentaId) : ' · Efectivo'}
+           ✓ Pagado el ${fechaCorta(pago.fecha)}${pago.metodo === 'digital' ? ' · ' + esc(cuentaName(pago.cuentaId)) : ' · Efectivo'}
          </button>`
       : `<button class="badge unpaid badge-btn" data-pay="${f.id}">⏳ Pendiente por pagar</button>`;
 
@@ -1798,8 +1826,8 @@ function renderFijos() {
     return `
     <div class="fijo-item" style="align-items:flex-start">
       <div class="fijo-info">
-        <div class="f-name">${f.name}</div>
-        <div class="f-sub">${sub}</div>
+        <div class="f-name">${esc(f.name)}</div>
+        <div class="f-sub">${esc(sub)}</div>
         <div style="margin-top:.4rem">${chip}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
@@ -1843,9 +1871,9 @@ function openPagoFijoModal(id) {
         <div class="quick-type-btn" data-metodo="digital" data-cuenta="${c.id}" style="flex:1 1 100%;text-align:left;display:flex;align-items:center;gap:.75rem">
           <div class="qt-icon" style="margin:0">💳</div>
           <div>
-            <div class="qt-label" style="color:var(--text)">${c.name}</div>
+            <div class="qt-label" style="color:var(--text)">${esc(c.name)}</div>
             <div style="font-size:.75rem;color:var(--text2)">
-              ${c.entidad ? c.entidad + ' · ' : ''}Saldo: ${fmt(cuentaBalance(c.id))}
+              ${c.entidad ? esc(c.entidad) + ' · ' : ''}Saldo: ${fmt(cuentaBalance(c.id))}
             </div>
           </div>
         </div>`).join('')
@@ -1855,7 +1883,7 @@ function openPagoFijoModal(id) {
 
   openModal('Registrar pago', `
     <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
-      <div style="font-weight:600;font-size:.95rem">${f.name}</div>
+      <div style="font-weight:600;font-size:.95rem">${esc(f.name)}</div>
       <div style="font-size:.8rem;color:var(--text2);margin-top:.15rem">
         ${periodicidadDe(f).label} · día ${f.diaPago || 1}
       </div>
@@ -1881,12 +1909,15 @@ function openPagoFijoModal(id) {
   });
 }
 
+let _pagoEnCurso = false;
 async function registrarPagoFijo(id, metodo, cuentaId) {
+  if (_pagoEnCurso) return;               // evita duplicar el gasto con doble toque
   const f = fijos.find(x => x.id === id);
   if (!f) return;
   if (fijoEstaPagado(f)) { showToast('⚠ Este gasto ya está pagado en este periodo'); return; }
+  _pagoEnCurso = true;
 
-  const fecha = fechaPagoFijo(f).toISOString().slice(0, 10);
+  const fecha = todayISO(fechaPagoFijo(f));
   const periodo = periodoActual(f);
 
   try {
@@ -1910,6 +1941,8 @@ async function registrarPagoFijo(id, metodo, cuentaId) {
   } catch (e) {
     console.error('Error registrando pago:', e);
     showToast('❌ No se pudo registrar el pago. Intenta de nuevo.');
+  } finally {
+    _pagoEnCurso = false;
   }
 }
 
@@ -1918,7 +1951,7 @@ async function confirmRevertirPago(id) {
   if (!f) return;
   const pago = pagoDeFijo(f);
   if (!pago) return;
-  if (!(await appConfirm(`¿Deshacer el pago de "${f.name}"? Se eliminará también el movimiento de ${fmt(f.amount)} y el saldo volverá a su estado anterior.`, 'Deshacer'))) return;
+  if (!(await appConfirm(`¿Deshacer el pago de "${esc(f.name)}"? Se eliminará también el movimiento de ${fmt(f.amount)} y el saldo volverá a su estado anterior.`, 'Deshacer'))) return;
 
   try {
     if (pago.txId) await deleteTransaction(pago.txId);
@@ -1946,7 +1979,7 @@ function renderAhorros() {
   document.getElementById('ahorro-mes-val').textContent = fmt(monthTotal);
 
   const list = document.getElementById('ahorros-list');
-  const sorted = [...savingTx].sort((a,b) => new Date(b.date) - new Date(a.date));
+  const sorted = [...savingTx].sort((a,b) => parseLocalDate(b.date) - parseLocalDate(a.date));
   if (!sorted.length) {
     list.innerHTML = '<div class="empty"><div class="e-icon">💰</div>Sin ahorros registrados. Toca + para agregar uno.</div>';
     return;
@@ -1977,8 +2010,8 @@ function renderCuentas() {
       return `
       <div class="fijo-item">
         <div class="fijo-info">
-          <div class="f-name">${c.name}</div>
-          <div class="f-sub">${c.entidad ? c.entidad + ' · ' : ''}${sub}</div>
+          <div class="f-name">${esc(c.name)}</div>
+          <div class="f-sub">${c.entidad ? esc(c.entidad) + ' · ' : ''}${sub}</div>
         </div>
         <div class="fijo-amount" style="color:${c.balance >= 0 ? 'var(--blue)' : 'var(--danger)'}">${fmt(c.balance)}</div>
         <div class="tx-actions" style="margin-left:.5rem">
@@ -2024,11 +2057,11 @@ function openCuentaForm(existing) {
   openModal((existing ? 'Editar' : 'Nueva') + ' cuenta digital', `
     <div class="form-group">
       <label class="form-label">Nombre de la cuenta *</label>
-      <input class="form-input" type="text" id="cf-name" placeholder="Ej: Nequi principal" value="${c.name}">
+      <input class="form-input" type="text" id="cf-name" placeholder="Ej: Nequi principal" value="${esc(c.name)}">
     </div>
     <div class="form-group">
       <label class="form-label">Entidad (opcional)</label>
-      <input class="form-input" type="text" id="cf-entidad" placeholder="Ej: Bancolombia" value="${c.entidad || ''}">
+      <input class="form-input" type="text" id="cf-entidad" placeholder="Ej: Bancolombia" value="${esc(c.entidad || '')}">
     </div>
     ${existing ? '' : `
     <div class="form-group">
@@ -2068,7 +2101,7 @@ async function saveCuentaForm(existingId) {
         await saveBalanceRecord({
           id: uid(), account: 'transfer', cuentaId: cuenta.id,
           previousAmount: 0, amount: saldo, diff: saldo,
-          date: new Date().toISOString().slice(0, 10),
+          date: todayISO(),
           notes: 'Saldo inicial de la cuenta', createdAt: Date.now()
         });
       }
@@ -2148,8 +2181,8 @@ function renderPatrimonioList(kind, elId, emoji, emptyMsg) {
   list.innerHTML = autoRow + items.map(p => `
     <div class="fijo-item">
       <div class="fijo-info">
-        <div class="f-name">${p.name}</div>
-        <div class="f-sub">${p.category}${p.notes ? ' · ' + p.notes : ''}</div>
+        <div class="f-name">${esc(p.name)}</div>
+        <div class="f-sub">${esc(p.category)}${p.notes ? ' · ' + esc(p.notes) : ''}</div>
       </div>
       <div class="fijo-amount" style="color:${kind === 'activo' ? 'var(--ok)' : 'var(--danger)'}">${fmt(p.amount)}</div>
       <div class="tx-actions" style="margin-left:.5rem">
@@ -2181,7 +2214,7 @@ function openPatrimonioForm(existing, defaultKind) {
     </div>
     <div class="form-group">
       <label class="form-label">Nombre / Descripción *</label>
-      <input class="form-input" type="text" id="pf-name" placeholder="Ej: Cuenta de ahorros / Tarjeta Visa" value="${p.name}">
+      <input class="form-input" type="text" id="pf-name" placeholder="Ej: Cuenta de ahorros / Tarjeta Visa" value="${esc(p.name)}">
     </div>
     <div class="form-group">
       <label class="form-label">Monto actual *</label>
@@ -2194,7 +2227,7 @@ function openPatrimonioForm(existing, defaultKind) {
     </div>
     <div class="form-group">
       <label class="form-label">Nota (opcional)</label>
-      <input class="form-input" type="text" id="pf-notes" placeholder="Sin nota" value="${p.notes || ''}">
+      <input class="form-input" type="text" id="pf-notes" placeholder="Sin nota" value="${esc(p.notes || '')}">
     </div>
     <button class="btn-primary" onclick="savePatrimonioForm('${existing?.id || ''}')">
       ${existing ? 'Guardar cambios' : 'Agregar'}
@@ -2276,18 +2309,18 @@ function renderConciliacion() {
     list.innerHTML = '<div class="empty"><div class="e-icon">🧮</div>Sin conciliaciones aún. Toca + o una tarjeta de saldo en el Dashboard para comparar tu saldo real.</div>';
     return;
   }
-  const sorted = [...balances].sort((a,b) => new Date(b.date) - new Date(a.date) || (b.createdAt||0)-(a.createdAt||0));
+  const sorted = [...balances].sort((a,b) => parseLocalDate(b.date) - parseLocalDate(a.date) || (b.createdAt||0)-(a.createdAt||0));
   list.innerHTML = sorted.map(b => {
     const sign = b.diff > 0 ? '+' : '';
     const color = b.diff > 0 ? 'var(--ok)' : (b.diff < 0 ? 'var(--danger)' : 'var(--text2)');
-    const d = new Date(b.date);
+    const d = parseLocalDate(b.date);
     const dateStr = d.toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
     return `
     <div class="recon-item">
       <div class="ri-icon">${b.account === 'efectivo' ? '💵' : '💳'}</div>
       <div class="ri-info">
-        <div class="ri-main">${ACCOUNT_LABELS[b.account]}${b.cuentaId ? ' · ' + cuentaName(b.cuentaId) : ''} · ${dateStr}</div>
-        <div class="ri-sub">${fmt(b.previousAmount)} → ${fmt(b.amount)}${b.notes ? ' · ' + b.notes : ''}</div>
+        <div class="ri-main">${ACCOUNT_LABELS[b.account]}${b.cuentaId ? ' · ' + esc(cuentaName(b.cuentaId)) : ''} · ${dateStr}</div>
+        <div class="ri-sub">${fmt(b.previousAmount)} → ${fmt(b.amount)}${b.notes ? ' · ' + esc(b.notes) : ''}</div>
       </div>
       <div class="ri-diff" style="color:${color}">${sign}${fmt(b.diff)}</div>
       <div class="tx-actions" style="margin-left:.25rem">
@@ -2346,7 +2379,7 @@ function renderInsights() {
       <div class="ant-alert" style="margin-bottom:.5rem">
         <div class="ant-icon">🐜</div>
         <div>
-          <div style="font-weight:600;font-size:.85rem">"${note}"</div>
+          <div style="font-weight:600;font-size:.85rem">"${esc(note)}"</div>
           <div style="font-size:.78rem;color:var(--text2)">Registrado ${count} veces este mes. Considera presupuestar este gasto.</div>
         </div>
       </div>`).join('');
@@ -2482,7 +2515,7 @@ function catsForType(type) {
 function openTxForm(type, existing) {
   modalMode = 'tx-' + type;
   const cats = catsForType(type);
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayISO();
   const t = existing || { amount:'', date: today, category: cats[0], account:'efectivo', notes:'' };
   openModal(
     (existing ? 'Editar' : 'Nuevo') + TYPE_TITLES[type],
@@ -2530,7 +2563,7 @@ function openTxForm(type, existing) {
     </div>
     <div class="form-group" id="notes-group">
       <label class="form-label">Descripción (opcional)</label>
-      <input class="form-input" type="text" id="f-notes" placeholder="Sin descripción" value="${t.notes||''}">
+      <input class="form-input" type="text" id="f-notes" placeholder="Sin descripción" value="${esc(t.notes||'')}">
     </div>
     <button class="btn-primary" onclick="saveTxForm('${type}', '${existing?.id||''}')">
       ${existing ? 'Guardar cambios' : 'Agregar'}
@@ -2617,7 +2650,7 @@ function openFijoForm(existing) {
   openModal((existing ? 'Editar' : 'Nuevo') + ' Gasto Fijo', `
     <div class="form-group">
       <label class="form-label">Nombre / Descripción *</label>
-      <input class="form-input" type="text" id="ff-name" placeholder="Ej: Arriendo" value="${f.name}">
+      <input class="form-input" type="text" id="ff-name" placeholder="Ej: Arriendo" value="${esc(f.name)}">
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -2714,7 +2747,7 @@ function openReconciliationModal(account, cuentaId) {
   _reconAccount = account || 'efectivo';
   _reconCuentaId = (_reconAccount === 'transfer' && cuentaId) ? cuentaId : '';
   modalMode = 'recon';
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayISO();
   openModal('Conciliar Saldo', `
     <div class="form-group">
       <label class="form-label">Cuenta a conciliar</label>
@@ -2727,7 +2760,7 @@ function openReconciliationModal(account, cuentaId) {
       <label class="form-label">Cuenta digital</label>
       <select class="form-input" id="rf-cuenta" onchange="switchReconCuenta(this.value)">
         <option value="">Total digital (todas)</option>
-        ${cuentas.map(c => `<option value="${c.id}" ${c.id===_reconCuentaId?'selected':''}>${c.name}</option>`).join('')}
+        ${cuentas.map(c => `<option value="${c.id}" ${c.id===_reconCuentaId?'selected':''}>${esc(c.name)}</option>`).join('')}
       </select>
     </div>
     <div class="recon-prev-box">
@@ -2837,7 +2870,7 @@ async function saveReconciliationForm() {
 function exportJSON() {
   const data = { version: 6, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio, cuentas };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  download(blob, 'kasa-backup-' + new Date().toISOString().slice(0,10) + '.json');
+  download(blob, 'kasa-backup-' + todayISO() + '.json');
   showToast('📦 JSON descargado');
 }
 
@@ -2849,32 +2882,40 @@ function exportCSV() {
   ]);
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-  download(blob, 'kasa-transacciones-' + new Date().toISOString().slice(0,10) + '.csv');
+  download(blob, 'kasa-transacciones-' + todayISO() + '.csv');
   showToast('📊 CSV descargado');
 }
 
 function download(blob, name) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = name;
+  // Adjuntar al DOM: algunos navegadores ignoran el click si no está en el documento.
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
+  // Libera la memoria del blob (antes quedaba retenida toda la sesión).
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function importJSON(file) {
   const text = await file.text();
   try {
     const data = JSON.parse(text);
-    if (!data.transactions) throw new Error('Formato inválido');
+    if (!data || !Array.isArray(data.transactions)) throw new Error('Formato inválido');
+    // Cada coleccion debe ser un arreglo; si no, se descarta en vez de romper la app.
+    const comoArray = v => Array.isArray(v) ? v : [];
     const ok = await appConfirm(
       `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos y ${(data.balances||[]).length} conciliaciones? Esto reemplazará los datos actuales.`,
       'Importar'
     );
     if (!ok) return;
-    transactions = data.transactions;
-    fijos = data.fijos || [];
-    balances = data.balances || [];
-    patrimonio = data.patrimonio || [];
-    cuentas = data.cuentas || [];
+    transactions = data.transactions.filter(t => t && t.id);
+    fijos = comoArray(data.fijos).filter(f => f && f.id);
+    balances = comoArray(data.balances).filter(b => b && b.id);
+    patrimonio = comoArray(data.patrimonio).filter(p => p && p.id);
+    cuentas = comoArray(data.cuentas).filter(c => c && c.id);
     await Promise.all(transactions.map(t => dbPut('transactions', t)));
     await Promise.all(fijos.map(f => dbPut('fijos', f)));
     await Promise.all(balances.map(b => dbPut('balances', b)));
@@ -3006,10 +3047,10 @@ function generateReportHTML() {
   const hoy = new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
 
   const rowsActivos = m.activosItems.length
-    ? m.activosItems.map(a => `<tr><td>${a.name}<span class="cat">${a.cat}</span></td><td class="num pos">${fmt(a.amount)}</td></tr>`).join('')
+    ? m.activosItems.map(a => `<tr><td>${esc(a.name)}<span class="cat">${esc(a.cat)}</span></td><td class="num pos">${fmt(a.amount)}</td></tr>`).join('')
     : '<tr><td class="muted">Sin activos registrados</td><td class="num">—</td></tr>';
   const rowsPasivos = m.pasivosItems.length
-    ? m.pasivosItems.map(p => `<tr><td>${p.name}<span class="cat">${p.cat}</span></td><td class="num neg">${fmt(p.amount)}</td></tr>`).join('')
+    ? m.pasivosItems.map(p => `<tr><td>${esc(p.name)}<span class="cat">${esc(p.cat)}</span></td><td class="num neg">${fmt(p.amount)}</td></tr>`).join('')
     : '<tr><td class="muted">Sin pasivos registrados</td><td class="num">—</td></tr>';
 
   const metricCard = (label, value, hint, color) => `
@@ -3097,7 +3138,7 @@ function generateReportHTML() {
   ${m.digital.items.length ? `
   <h2>2.1 · Detalle de Cuentas Digitales</h2>
   <table>
-    ${m.digital.items.map(c => `<tr><td>${c.name}${c.entidad ? `<span class="cat">${c.entidad}</span>` : ''}</td><td class="num">${fmt(c.balance)}</td></tr>`).join('')}
+    ${m.digital.items.map(c => `<tr><td>${esc(c.name)}${c.entidad ? `<span class="cat">${esc(c.entidad)}</span>` : ''}</td><td class="num">${fmt(c.balance)}</td></tr>`).join('')}
     ${Math.round(m.digital.sinAsignar) !== 0 ? `<tr><td class="muted">Sin asignar</td><td class="num">${fmt(m.digital.sinAsignar)}</td></tr>` : ''}
     <tr class="total"><td>Total Digital</td><td class="num">${fmt(m.digital.total)}</td></tr>
   </table>` : ''}
@@ -3164,7 +3205,7 @@ function exportReportCSV() {
 
   push('KASA · ESTADOS FINANCIEROS PERSONALES', '');
   push('Periodo', m.periodo);
-  push('Generado', new Date().toISOString().slice(0, 10));
+  push('Generado', todayISO());
   push('', '');
   push('ESTADO DE RESULTADOS', 'Monto (COP)');
   push('Ingresos totales', m.ingresos);
@@ -3201,7 +3242,7 @@ function exportReportCSV() {
 
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-  download(blob, 'kasa-eeff-' + new Date().toISOString().slice(0, 10) + '.csv');
+  download(blob, 'kasa-eeff-' + todayISO() + '.csv');
   showToast('📈 Reporte EEFF (CSV) descargado');
 }
 
