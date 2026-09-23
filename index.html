@@ -275,6 +275,12 @@ a{text-decoration:none;color:inherit}
 .fijo-amount.unpaid{color:var(--text2)}
 
 /* Badges */
+.badge-btn{
+  font-family:inherit;cursor:pointer;border:none;
+  transition:all .15s;
+}
+.badge-btn:hover{filter:brightness(.94);transform:translateY(-1px)}
+.badge-btn:active{transform:scale(.97)}
 .badge{
   display:inline-flex;align-items:center;
   padding:2px 8px;border-radius:99px;font-size:.72rem;font-weight:500;
@@ -751,6 +757,21 @@ a{text-decoration:none;color:inherit}
       </div>
     </div>
 
+    <!-- Meta de ahorro mensual: prorratea mensuales + fracción de anuales -->
+    <div class="goal-card purple">
+      <div class="g-label">🎯 Ahorro mensual requerido</div>
+      <div class="g-amount" id="fijos-mensual-val">$0</div>
+      <div class="g-sub" id="fijos-mensual-sub">Suma de tus gastos fijos mensuales</div>
+    </div>
+
+    <div class="fijos-summary" style="background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.25)">
+      <div>
+        <div style="font-size:.75rem;color:var(--text2)">⏳ Pendiente por pagar</div>
+        <div class="fs-val" id="fijos-pendiente-val">$0</div>
+      </div>
+      <div style="text-align:right;font-size:.75rem;color:var(--text2)" id="fijos-pendiente-sub">0 de 0 sin pagar</div>
+    </div>
+
     <div class="section-title" style="margin-bottom:.75rem">Mis gastos fijos</div>
     <div id="fijos-list"></div>
   </section>
@@ -1188,6 +1209,65 @@ function fijosDiarioTotal() {
 }
 
 /* ─────────────────────────────────────────────────────────
+   PERIODICIDAD Y PRORRATEO DE GASTOS FIJOS
+   Un gasto anual (SOAT, impuestos) no se paga cada mes, pero
+   SÍ hay que apartar su fracción mensual. El prorrateo reparte
+   el monto entre los meses de su ciclo.
+───────────────────────────────────────────────────────── */
+const PERIODICIDADES = [
+  { id: 'mensual',    label: 'Mensual',      meses: 1  },
+  { id: 'bimestral',  label: 'Bimestral',    meses: 2  },
+  { id: 'trimestral', label: 'Trimestral',   meses: 3  },
+  { id: 'semestral',  label: 'Semestral',    meses: 6  },
+  { id: 'anual',      label: 'Anual',        meses: 12 },
+  { id: 'bianual',    label: 'Cada 2 años',  meses: 24 }
+];
+
+function periodicidadDe(f) {
+  return PERIODICIDADES.find(x => x.id === (f.periodicidad || 'mensual')) || PERIODICIDADES[0];
+}
+function mesesCiclo(f) { return periodicidadDe(f).meses; }
+
+// Fracción que hay que apartar cada mes para cubrir el gasto.
+function fijoMensualProrrateado(f) { return f.amount / mesesCiclo(f); }
+
+// Meta: cuánto ahorrar al mes para cubrir TODOS los fijos (mensuales + anuales).
+function fijosMensualRequerido() {
+  return fijos.reduce((s, f) => s + fijoMensualProrrateado(f), 0);
+}
+
+/* Identificador del ciclo vigente, según el mes seleccionado.
+   Permite marcar el pago una vez por ciclo (un SOAT se paga 1 vez al año). */
+function periodoActual(f, month, year) {
+  const m = (month == null) ? currentMonth : month;
+  const y = (year == null) ? currentYear : year;
+  const meses = mesesCiclo(f);
+  if (meses <= 1) return y + '-' + String(m + 1).padStart(2, '0');
+  if (meses < 12) return y + '-C' + meses + '-' + Math.floor(m / meses);
+  if (meses === 12) return String(y);
+  const bloque = meses / 12;
+  return 'B' + (Math.floor(y / bloque) * bloque);
+}
+
+function pagoDeFijo(f, periodo) {
+  const per = periodo || periodoActual(f);
+  return (f.pagos || []).find(x => x.periodo === per) || null;
+}
+function fijoEstaPagado(f) { return !!pagoDeFijo(f); }
+
+// Fecha de pago del ciclo vigente (día elegido del mes).
+function fechaPagoFijo(f) {
+  const dia = Math.min(Math.max(parseInt(f.diaPago) || 1, 1), 31);
+  const ultimo = new Date(currentYear, currentMonth + 1, 0).getDate();
+  return new Date(currentYear, currentMonth, Math.min(dia, ultimo));
+}
+
+function fechaCorta(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+/* ─────────────────────────────────────────────────────────
    TOTALES POR TIPO DE CUENTA (Efectivo vs Digital)
    Balance por cuenta = Ingresos - Gastos - Ahorros, filtrado
    por el campo "account" de cada transacción.
@@ -1524,7 +1604,8 @@ function renderDashboard() {
   if (fijos.length > 0) {
     goalCard.style.display = 'block';
     document.getElementById('dash-meta-diaria').textContent = fmt(diariaTotal);
-    document.getElementById('dash-meta-sub').textContent = 'Meta diaria combinada de tus gastos fijos';
+    document.getElementById('dash-meta-sub').textContent =
+      'Meta diaria · Ahorro mensual requerido: ' + fmt(fijosMensualRequerido());
   } else {
     goalCard.style.display = 'none';
   }
@@ -1663,23 +1744,68 @@ function renderFijos() {
   const list = document.getElementById('fijos-list');
   const total = fijos.reduce((s,f) => s+f.amount, 0);
   const diariaTotal = fijosDiarioTotal();
+  const mensualReq = fijosMensualRequerido();
 
   document.getElementById('fijos-total-val').textContent = fmt(total);
   document.getElementById('fijos-pending-val').textContent = fmt(diariaTotal);
+
+  // Meta de ahorro mensual (prorratea anuales y demás periodicidades)
+  const mensualEl = document.getElementById('fijos-mensual-val');
+  if (mensualEl) {
+    mensualEl.textContent = fmt(mensualReq);
+    const noMensuales = fijos.filter(f => mesesCiclo(f) > 1).length;
+    document.getElementById('fijos-mensual-sub').textContent = noMensuales
+      ? `Incluye la fracción mensual de ${noMensuales} gasto(s) de periodicidad mayor`
+      : 'Suma de tus gastos fijos mensuales';
+  }
+
+  // Pendiente por pagar en el ciclo vigente
+  const pendientes = fijos.filter(f => !fijoEstaPagado(f));
+  const pendienteEl = document.getElementById('fijos-pendiente-val');
+  if (pendienteEl) {
+    pendienteEl.textContent = fmt(pendientes.reduce((s,f) => s+f.amount, 0));
+    document.getElementById('fijos-pendiente-sub').textContent =
+      `${pendientes.length} de ${fijos.length} sin pagar`;
+  }
 
   if (!fijos.length) {
     list.innerHTML = '<div class="empty"><div class="e-icon">📌</div>Sin gastos fijos registrados.</div>';
     return;
   }
-  list.innerHTML = fijos.map(f => {
-    const diaria = fijoDiaria(f);
+
+  // Ordena: primero lo pendiente, luego por día de pago.
+  const ordenados = [...fijos].sort((a,b) => {
+    const pa = fijoEstaPagado(a) ? 1 : 0, pb = fijoEstaPagado(b) ? 1 : 0;
+    return pa - pb || (a.diaPago||1) - (b.diaPago||1);
+  });
+
+  list.innerHTML = ordenados.map(f => {
+    const per = periodicidadDe(f);
+    const pago = pagoDeFijo(f);
+    const mensual = fijoMensualProrrateado(f);
+
+    const chip = pago
+      ? `<button class="badge paid badge-btn" data-revert="${f.id}" title="Deshacer pago">
+           ✓ Pagado el ${fechaCorta(pago.fecha)}${pago.metodo === 'digital' ? ' · ' + cuentaName(pago.cuentaId) : ' · Efectivo'}
+         </button>`
+      : `<button class="badge unpaid badge-btn" data-pay="${f.id}">⏳ Pendiente por pagar</button>`;
+
+    const sub = `${f.category} · ${per.label} · día ${f.diaPago || 1}`;
+    const prorrateo = per.meses > 1
+      ? `<div style="font-size:.7rem;color:var(--blue)">${fmt(mensual)}/mes a apartar</div>`
+      : '';
+
     return `
-    <div class="fijo-item">
+    <div class="fijo-item" style="align-items:flex-start">
       <div class="fijo-info">
         <div class="f-name">${f.name}</div>
-        <div class="f-sub">${f.category} · ${f.dias || 0} días elegibles · ${fmt(diaria)}/día</div>
+        <div class="f-sub">${sub}</div>
+        <div style="margin-top:.4rem">${chip}</div>
       </div>
-      <div class="fijo-amount">${fmt(f.amount)}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="fijo-amount ${pago ? 'paid' : ''}">${fmt(f.amount)}</div>
+        ${prorrateo}
+      </div>
       <div class="tx-actions" style="margin-left:.5rem">
         <button class="tx-btn edit" data-id="${f.id}">✏️</button>
         <button class="tx-btn del" data-id="${f.id}">🗑</button>
@@ -1688,12 +1814,124 @@ function renderFijos() {
   `;
   }).join('');
 
+  list.querySelectorAll('[data-pay]').forEach(btn => {
+    btn.onclick = () => openPagoFijoModal(btn.dataset.pay);
+  });
+  list.querySelectorAll('[data-revert]').forEach(btn => {
+    btn.onclick = () => confirmRevertirPago(btn.dataset.revert);
+  });
   list.querySelectorAll('.tx-btn.edit').forEach(btn => {
     btn.onclick = () => openEditFijo(btn.dataset.id);
   });
   list.querySelectorAll('.tx-btn.del').forEach(btn => {
     btn.onclick = () => confirmDeleteFijo(btn.dataset.id);
   });
+}
+
+/* ────────────────────────────────────────
+   PAGO DE UN GASTO FIJO
+   Al elegir el método se genera una transacción de gasto real,
+   de modo que el saldo (efectivo o la cuenta digital elegida)
+   se descuenta automáticamente con la lógica ya existente.
+──────────────────────────────────────── */
+function openPagoFijoModal(id) {
+  const f = fijos.find(x => x.id === id);
+  if (!f) return;
+
+  const opcionesDigital = cuentas.length
+    ? cuentas.map(c => `
+        <div class="quick-type-btn" data-metodo="digital" data-cuenta="${c.id}" style="flex:1 1 100%;text-align:left;display:flex;align-items:center;gap:.75rem">
+          <div class="qt-icon" style="margin:0">💳</div>
+          <div>
+            <div class="qt-label" style="color:var(--text)">${c.name}</div>
+            <div style="font-size:.75rem;color:var(--text2)">
+              ${c.entidad ? c.entidad + ' · ' : ''}Saldo: ${fmt(cuentaBalance(c.id))}
+            </div>
+          </div>
+        </div>`).join('')
+    : `<div style="font-size:.8rem;color:var(--text2);padding:.5rem 0">
+         No tienes cuentas digitales. Créalas en 💳 Cuentas Digitales.
+       </div>`;
+
+  openModal('Registrar pago', `
+    <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
+      <div style="font-weight:600;font-size:.95rem">${f.name}</div>
+      <div style="font-size:.8rem;color:var(--text2);margin-top:.15rem">
+        ${periodicidadDe(f).label} · día ${f.diaPago || 1}
+      </div>
+      <div style="font-family:var(--font-head);font-weight:800;font-size:1.5rem;margin-top:.4rem">${fmt(f.amount)}</div>
+    </div>
+
+    <label class="form-label">Método de pago</label>
+    <div class="quick-types" style="margin-bottom:.5rem">
+      <div class="quick-type-btn" data-metodo="efectivo" style="flex:1 1 100%;text-align:left;display:flex;align-items:center;gap:.75rem">
+        <div class="qt-icon" style="margin:0">💵</div>
+        <div>
+          <div class="qt-label" style="color:var(--text)">Efectivo</div>
+          <div style="font-size:.75rem;color:var(--text2)">Saldo: ${fmt(accountTotals().cash)}</div>
+        </div>
+      </div>
+    </div>
+    <label class="form-label">Cuentas digitales</label>
+    <div class="quick-types">${opcionesDigital}</div>
+  `);
+
+  document.querySelectorAll('#modal-content [data-metodo]').forEach(btn => {
+    btn.onclick = () => registrarPagoFijo(id, btn.dataset.metodo, btn.dataset.cuenta || '');
+  });
+}
+
+async function registrarPagoFijo(id, metodo, cuentaId) {
+  const f = fijos.find(x => x.id === id);
+  if (!f) return;
+  if (fijoEstaPagado(f)) { showToast('⚠ Este gasto ya está pagado en este periodo'); return; }
+
+  const fecha = fechaPagoFijo(f).toISOString().slice(0, 10);
+  const periodo = periodoActual(f);
+
+  try {
+    // Transacción real: descuenta el saldo de efectivo o de la cuenta digital.
+    const tx = {
+      id: uid(), type: 'expense', amount: f.amount, date: fecha,
+      category: f.category, account: metodo === 'digital' ? 'transfer' : 'efectivo',
+      cuentaId: metodo === 'digital' ? cuentaId : '',
+      notes: 'Pago gasto fijo: ' + f.name
+    };
+    await saveTransaction(tx);
+
+    const actualizado = Object.assign({}, f, {
+      pagos: (f.pagos || []).concat([{ periodo, fecha, metodo, cuentaId: cuentaId || '', txId: tx.id }])
+    });
+    await saveFijo(actualizado);
+
+    closeModal();
+    showToast(`✅ Pagado · ${metodo === 'digital' ? cuentaName(cuentaId) : 'Efectivo'} −${fmt(f.amount)}`);
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error registrando pago:', e);
+    showToast('❌ No se pudo registrar el pago. Intenta de nuevo.');
+  }
+}
+
+async function confirmRevertirPago(id) {
+  const f = fijos.find(x => x.id === id);
+  if (!f) return;
+  const pago = pagoDeFijo(f);
+  if (!pago) return;
+  if (!(await appConfirm(`¿Deshacer el pago de "${f.name}"? Se eliminará también el movimiento de ${fmt(f.amount)} y el saldo volverá a su estado anterior.`, 'Deshacer'))) return;
+
+  try {
+    if (pago.txId) await deleteTransaction(pago.txId);
+    const actualizado = Object.assign({}, f, {
+      pagos: (f.pagos || []).filter(x => x.periodo !== pago.periodo)
+    });
+    await saveFijo(actualizado);
+    showToast('↩ Pago deshecho');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error revirtiendo pago:', e);
+    showToast('❌ No se pudo deshacer. Intenta de nuevo.');
+  }
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -2374,7 +2612,8 @@ async function confirmDeleteTx(id) {
 }
 
 function openFijoForm(existing) {
-  const f = existing || { name:'', amount:'', category: FIJO_CATS[0], dias: 30 };
+  const f = existing || { name:'', amount:'', category: FIJO_CATS[0], dias: 30,
+                          diaPago: 1, periodicidad: 'mensual' };
   openModal((existing ? 'Editar' : 'Nuevo') + ' Gasto Fijo', `
     <div class="form-group">
       <label class="form-label">Nombre / Descripción *</label>
@@ -2391,11 +2630,28 @@ function openFijoForm(existing) {
         <input class="form-input" type="number" id="ff-dias" placeholder="Ej: 30" value="${f.dias || ''}" min="1">
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Día de pago *</label>
+        <input class="form-input" type="number" id="ff-diapago" placeholder="Ej: 5"
+               value="${f.diaPago || 1}" min="1" max="31">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Periodicidad *</label>
+        <select class="form-input" id="ff-periodicidad">
+          ${PERIODICIDADES.map(x => `<option value="${x.id}" ${x.id===(f.periodicidad||'mensual')?'selected':''}>${x.label}</option>`).join('')}
+        </select>
+      </div>
+    </div>
     <div class="form-group">
       <label class="form-label">Categoría *</label>
       <select class="form-input" id="ff-category">
         ${FIJO_CATS.map(c => `<option ${c===f.category?'selected':''}>${c}</option>`).join('')}
       </select>
+    </div>
+    <div style="font-size:.75rem;color:var(--text2);margin-bottom:.5rem">
+      💡 En gastos anuales (SOAT, impuestos) el monto es el del pago completo.
+      Kasa prorratea la fracción que debes apartar cada mes.
     </div>
     <button class="btn-primary" onclick="saveFijoForm('${existing?.id||''}')">
       ${existing ? 'Guardar cambios' : 'Agregar'}
@@ -2408,11 +2664,17 @@ async function saveFijoForm(existingId) {
   const amount = moneyVal('ff-amount');
   const dias = parseInt(document.getElementById('ff-dias').value);
   const category = document.getElementById('ff-category').value;
+  const diaPago = parseInt(document.getElementById('ff-diapago').value);
+  const periodicidad = document.getElementById('ff-periodicidad').value;
   if (!name) { showToast('⚠ Ingresa un nombre'); return; }
   if (!amount || amount <= 0) { showToast('⚠ Ingresa un monto válido'); return; }
   if (!dias || dias <= 0) { showToast('⚠ Ingresa los días elegibles'); return; }
+  if (!diaPago || diaPago < 1 || diaPago > 31) { showToast('⚠ El día de pago debe estar entre 1 y 31'); return; }
 
-  const fijo = { id: existingId || uid(), name, amount, category, dias };
+  // Al editar se conserva el historial de pagos ya registrado.
+  const previo = existingId ? fijos.find(x => x.id === existingId) : null;
+  const fijo = { id: existingId || uid(), name, amount, category, dias,
+                 diaPago, periodicidad, pagos: (previo && previo.pagos) || [] };
   try {
     await saveFijo(fijo);
     closeModal();
