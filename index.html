@@ -692,7 +692,7 @@ a{text-decoration:none;color:inherit}
         <div class="s-val danger" id="stat-expense">$0</div>
       </div>
       <div class="stat-card">
-        <div class="s-label">📌 Gastos fijos totales</div>
+        <div class="s-label">📌 Gastos fijos del mes</div>
         <div class="s-val" id="stat-fijos-pending">$0</div>
       </div>
       <div class="stat-card">
@@ -750,7 +750,7 @@ a{text-decoration:none;color:inherit}
 
     <div class="fijos-summary" id="fijos-summary">
       <div>
-        <div style="font-size:.75rem;color:var(--text2)">Total compromisos</div>
+        <div style="font-size:.75rem;color:var(--text2)">Total compromisos (anualizado)</div>
         <div class="fs-val" id="fijos-total-val">$0</div>
       </div>
       <div style="text-align:right">
@@ -1690,7 +1690,9 @@ function renderDashboard() {
   // Desglose de cuentas digitales
   renderDashCuentas();
 
-  const fixedTotal = fijos.reduce((s,f) => s+f.amount, 0);
+  // Carga MENSUAL de los fijos: los de periodicidad mayor entran solo con
+  // su fraccion del mes, no con el pago completo.
+  const fixedTotal = fijosMensualRequerido();
   document.getElementById('stat-fijos-pending').textContent = fmt(fixedTotal);
 
   // Meta diaria acumulable de gastos fijos (suma de monto ÷ días de cada uno)
@@ -2439,7 +2441,8 @@ function renderInsights() {
   const monthTx = transactions.filter(t => isSameMonth(t.date, currentMonth, currentYear));
   const income = monthTx.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
   const varExp = monthTx.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
-  const fixedTotal = fijos.reduce((s,f) => s+f.amount, 0);
+  // Carga mensual prorrateada (un anual aporta 1/12 al mes, no su total).
+  const fixedTotal = fijosMensualRequerido();
   const saving = monthTx.filter(t => t.type === 'saving').reduce((s,t) => s+t.amount, 0);
 
   // 50/30/20
@@ -3032,7 +3035,8 @@ function computeReport() {
   // ── Estado de Resultados (flujo del periodo) ──
   const ingresos = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const gastosVariables = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const gastosFijos = fijos.reduce((s, f) => s + f.amount, 0);
+  // Prorrateado: el Estado de Resultados cubre un mes, no el ano completo.
+  const gastosFijos = fijosMensualRequerido();
   const gastosTotales = gastosVariables + gastosFijos;
   const flujoNeto = ingresos - gastosTotales;
   const ahorroPeriodo = monthTx.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
