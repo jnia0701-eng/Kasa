@@ -729,6 +729,11 @@ body.modal-open{overflow:hidden}
       <button class="icon-btn" id="add-btn-tx">＋</button>
     </div>
 
+    <div class="form-group" style="margin-bottom:.75rem">
+      <input class="form-input" type="search" id="tx-search" autocomplete="off"
+             placeholder="🔍 Buscar por categoria, nota o cuenta…">
+    </div>
+
     <div class="filter-bar" id="filter-bar">
       <div class="filter-chip active" data-filter="all">Todo</div>
       <div class="filter-chip" data-filter="mes">Este mes</div>
@@ -739,6 +744,7 @@ body.modal-open{overflow:hidden}
       <div class="filter-chip" data-filter="transfer">Transferencia</div>
     </div>
 
+    <div class="muted" id="tx-resumen" style="margin-bottom:.6rem"></div>
     <div id="tx-list" class="tx-list"></div>
   </section>
 
@@ -1110,27 +1116,31 @@ function safeLSSet(key, value) {
   try { localStorage.setItem(key, value); return true; } catch (e) { return false; }
 }
 
+/* Lectura tolerante del respaldo: si el JSON esta corrupto devuelve el
+   respaldo en memoria en vez de lanzar y dejar la promesa sin resolver. */
+function leerRespaldo(store) {
+  const raw = safeLSGet(store);
+  if (raw !== null) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      console.warn('Respaldo local ilegible en "' + store + '", se ignora.', e);
+    }
+  }
+  return memoryFallback[store] || [];
+}
+
 function dbGet(store) {
   return new Promise((resolve) => {
-    if (!db) {
-      const raw = safeLSGet(store);
-      if (raw !== null) {
-        try { resolve(JSON.parse(raw)); return; } catch (e) { /* fall through */ }
-      }
-      resolve(memoryFallback[store] || []);
-      return;
-    }
+    if (!db) { resolve(leerRespaldo(store)); return; }
     try {
       const tx = db.transaction(store, 'readonly');
       const req = tx.objectStore(store).getAll();
       req.onsuccess = () => resolve(req.result);
-      req.onerror = () => {
-        const raw = safeLSGet(store);
-        resolve(raw !== null ? JSON.parse(raw) : (memoryFallback[store] || []));
-      };
+      req.onerror = () => resolve(leerRespaldo(store));
     } catch (e) {
-      const raw = safeLSGet(store);
-      resolve(raw !== null ? JSON.parse(raw) : (memoryFallback[store] || []));
+      resolve(leerRespaldo(store));
     }
   });
 }
@@ -1145,7 +1155,7 @@ function dbPut(store, item) {
 
     if (!db) {
       try {
-        let arr = JSON.parse(safeLSGet(store) || '[]');
+        let arr = leerRespaldo(store).slice();
         const idx = arr.findIndex(x => x.id === item.id);
         if (idx >= 0) arr[idx] = item; else arr.push(item);
         safeLSSet(store, JSON.stringify(arr));
@@ -1168,7 +1178,7 @@ function dbDelete(store, id) {
 
     if (!db) {
       try {
-        let arr = JSON.parse(safeLSGet(store) || '[]');
+        const arr = leerRespaldo(store);
         safeLSSet(store, JSON.stringify(arr.filter(x => x.id !== id)));
       } catch (e) { /* se conserva igual en memoryFallback */ }
       resolve(true);
@@ -1278,11 +1288,15 @@ function diaPagoDe(f) {
   return Math.min(Math.max(parseInt(f.diaPago) || 1, 1), 31);
 }
 
-// El pago más reciente registrado.
+// El pago mas reciente. Una sola pasada: se llama en bucles de render.
 function ultimoPagoFijo(f) {
-  const pagos = (f.pagos || []).slice()
-    .sort((a, b) => parseLocalDate(b.fecha) - parseLocalDate(a.fecha));
-  return pagos.length ? pagos[0] : null;
+  const pagos = f.pagos || [];
+  let mejor = null, mejorT = -Infinity;
+  for (let i = 0; i < pagos.length; i++) {
+    const t = parseLocalDate(pagos[i].fecha).getTime();
+    if (Number.isFinite(t) && t >= mejorT) { mejorT = t; mejor = pagos[i]; }
+  }
+  return mejor;
 }
 
 /* Próxima fecha de vencimiento.
@@ -1348,14 +1362,16 @@ function fechaCorta(iso) {
    por el campo "account" de cada transacción.
 ───────────────────────────────────────────────────────── */
 function accountTotals() {
-  const calcBalance = (account) => {
-    const arr = transactions.filter(t => t.account === account);
-    const inc = arr.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
-    const exp = arr.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
-    const sav = arr.filter(t => t.type === 'saving').reduce((s,t) => s+t.amount, 0);
-    return inc - exp - sav;
-  };
-  return { cash: calcBalance('efectivo'), digital: calcBalance('transfer') };
+  let cash = 0, digital = 0;
+  for (let i = 0; i < transactions.length; i++) {
+    const t = transactions[i];
+    if (t.type !== 'income' && t.type !== 'expense' && t.type !== 'saving') continue;
+    const monto = Number(t.amount) || 0;
+    const delta = t.type === 'income' ? monto : -monto;   // gasto y ahorro restan
+    if (t.account === 'efectivo') cash += delta;
+    else if (t.account === 'transfer') digital += delta;
+  }
+  return { cash, digital };
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -1478,17 +1494,39 @@ function cuentaBalance(id) {
   return cuentaDerivedBalance(id) + cuentaReconDiff(id);
 }
 
-/* Desglose completo del dinero digital. */
+/* Desglose completo del dinero digital, en una sola pasada. */
 function digitalBreakdown() {
-  const items = cuentas.map(c => ({
-    id: c.id, name: c.name, entidad: c.entidad || '', balance: cuentaBalance(c.id)
-  })).sort((a, b) => b.balance - a.balance);
+  const derivado = new Map();     // cuentaId -> saldo por movimientos
+  let digitalDerived = 0;
 
-  const digitalDerived = accountTotals().digital;
-  const asignadoDerived = cuentas.reduce((s, c) => s + cuentaDerivedBalance(c.id), 0);
+  for (let i = 0; i < transactions.length; i++) {
+    const t = transactions[i];
+    if (t.account !== 'transfer') continue;
+    if (t.type !== 'income' && t.type !== 'expense' && t.type !== 'saving') continue;
+    const monto = Number(t.amount) || 0;
+    const delta = t.type === 'income' ? monto : -monto;
+    digitalDerived += delta;
+    if (t.cuentaId) derivado.set(t.cuentaId, (derivado.get(t.cuentaId) || 0) + delta);
+  }
+
+  const ajustes = new Map();      // cuentaId -> diferencias conciliadas
+  for (let i = 0; i < balances.length; i++) {
+    const b = balances[i];
+    if (b.account === 'transfer' && b.cuentaId) {
+      ajustes.set(b.cuentaId, (ajustes.get(b.cuentaId) || 0) + (Number(b.diff) || 0));
+    }
+  }
+
+  let asignadoDerived = 0, totalCuentas = 0;
+  const items = cuentas.map(c => {
+    const der = derivado.get(c.id) || 0;
+    asignadoDerived += der;
+    const balance = der + (ajustes.get(c.id) || 0);
+    totalCuentas += balance;
+    return { id: c.id, name: c.name, entidad: c.entidad || '', balance };
+  }).sort((a, b) => b.balance - a.balance);
+
   const sinAsignar = digitalDerived - asignadoDerived;   // movimientos sin cuenta
-  const totalCuentas = items.reduce((s, i) => s + i.balance, 0);
-
   return { items, sinAsignar, totalCuentas, total: totalCuentas + sinAsignar };
 }
 
@@ -1586,11 +1624,35 @@ function fmtInput(n) {
   return '$ ' + fmtPlain(n);
 }
 
-// Convierte cualquier texto con puntos/símbolos a número entero.
+/* Tope de importe. 12 digitos se mantienen muy por debajo de
+   Number.MAX_SAFE_INTEGER (9.007.199.254.740.991), asi que ninguna suma
+   pierde precision. */
+const MONTO_MAX = 999999999999;
+
+// Convierte cualquier texto con puntos/simbolos a numero entero seguro.
 function parseMoney(v) {
-  if (typeof v === 'number') return v;
-  const digits = String(v == null ? '' : v).replace(/\D/g, '');
+  if (typeof v === 'number') return Number.isFinite(v) ? Math.min(Math.abs(v), MONTO_MAX) : 0;
+  // El recorte a 12 digitos evita el desbordamiento ya en la entrada.
+  const digits = String(v == null ? '' : v).replace(/\D/g, '').slice(0, 12);
   return digits ? parseInt(digits, 10) : 0;
+}
+
+/* Validacion unica de importes: mensaje claro y sin exponer internos. */
+function validarMonto(n) {
+  if (!Number.isFinite(n) || n <= 0) return '⚠ Ingresa un monto mayor a cero';
+  if (n > MONTO_MAX) return '⚠ El monto supera el maximo permitido (' + fmt(MONTO_MAX) + ')';
+  return '';
+}
+
+/* Valida una fecha ISO dentro de un rango razonable. Evita anios como
+   0002 o 9999 escritos por error en el selector nativo. */
+function validarFecha(iso) {
+  if (!iso) return '⚠ Ingresa la fecha';
+  const d = parseLocalDate(iso);
+  if (isNaN(d.getTime())) return '⚠ La fecha no es valida';
+  const anio = d.getFullYear();
+  if (anio < 2000 || anio > 2100) return '⚠ La fecha debe estar entre 2000 y 2100';
+  return '';
 }
 
 // Lee un input de dinero por id y devuelve su valor numérico.
@@ -1802,6 +1864,7 @@ function renderAccountDiffBadge(elId, account) {
    TRANSACTIONS PAGE
 ───────────────────────────────────────────────────────── */
 let activeFilter = 'all';
+let _txBusqueda = '';
 
 function renderTransactions() {
   document.querySelectorAll('.filter-chip').forEach(c => {
@@ -1810,6 +1873,17 @@ function renderTransactions() {
   });
 
   let filtered = [...transactions];
+
+  // Busqueda libre sobre categoria, nota y nombre de cuenta.
+  const termino = (_txBusqueda || '').trim().toLowerCase();
+  if (termino) {
+    filtered = filtered.filter(t =>
+      (t.category || '').toLowerCase().includes(termino) ||
+      (t.notes || '').toLowerCase().includes(termino) ||
+      (t.cuentaId ? cuentaName(t.cuentaId).toLowerCase().includes(termino) : false)
+    );
+  }
+
   if (activeFilter === 'mes') filtered = filtered.filter(t => isSameMonth(t.date, currentMonth, currentYear));
   else if (activeFilter === 'income') filtered = filtered.filter(t => t.type === 'income');
   else if (activeFilter === 'expense') filtered = filtered.filter(t => t.type === 'expense');
@@ -1820,10 +1894,18 @@ function renderTransactions() {
   filtered.sort((a,b) => parseLocalDate(b.date) - parseLocalDate(a.date));
 
   const list = document.getElementById('tx-list');
+  const resumen = document.getElementById('tx-resumen');
   if (!filtered.length) {
-    list.innerHTML = '<div class="empty"><div class="e-icon">🔍</div>No hay transacciones con este filtro.</div>';
+    resumen.textContent = '';
+    list.innerHTML = termino
+      ? `<div class="empty"><div class="e-icon">🔍</div>Sin resultados para “${esc(termino)}”.</div>`
+      : '<div class="empty"><div class="e-icon">🔍</div>No hay transacciones con este filtro.</div>';
     return;
   }
+
+  // Neto del resultado: da contexto inmediato al buscar o filtrar.
+  const suma = filtered.reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0);
+  resumen.textContent = `${filtered.length} movimiento(s) · neto ${fmt(suma)}`;
   list.innerHTML = filtered.map(t => txItemHTML(t, true)).join('');
   attachTxEvents(list);
 }
@@ -1903,22 +1985,18 @@ function renderFijos() {
     return;
   }
 
-  // Ordena: vencidos primero, luego por vencer, y dentro de cada grupo
-  // lo que vence antes.
+  /* El estado se calcula UNA vez por gasto y se ordena sobre el valor ya
+     calculado, en vez de recalcularlo dentro del comparador. */
   const PRIO = { vencido: 0, sinRegistrar: 1, porPagar: 2, pagado: 3 };
-  const ordenados = [...fijos].sort((a,b) =>
-    PRIO[estadoFijo(a)] - PRIO[estadoFijo(b)] ||
-    diasHastaVencimiento(a) - diasHastaVencimiento(b)
-  );
+  const ordenados = fijos
+    .map(f => ({ f, estado: estadoFijo(f), dias: diasHastaVencimiento(f), venc: proximoVencimiento(f) }))
+    .sort((a, b) => PRIO[a.estado] - PRIO[b.estado] || a.dias - b.dias);
 
-  list.innerHTML = ordenados.map(f => {
+  list.innerHTML = ordenados.map(({ f, estado, dias, venc }) => {
     const per = periodicidadDe(f);
     const pago = pagoDeFijo(f);
     const mensual = fijoMensualProrrateado(f);
-
-    const estado = estadoFijo(f);
-    const dias = diasHastaVencimiento(f);
-    const vence = fechaCorta(todayISO(proximoVencimiento(f)));
+    const vence = fechaCorta(todayISO(venc));
 
     let chip;
     if (estado === 'pagado') {
@@ -2141,6 +2219,7 @@ async function guardarEdicionPago(id) {
   if (!fecha) { showToast('⚠ Ingresa la fecha del pago'); return; }
   const [metodo, cuentaId] = document.getElementById('ep-metodo').value.split(':');
 
+  if (!tomarCandado()) return;
   try {
     /* Solo se sincronizan metodo y cuenta (de donde sale la plata).
        La fecha del movimiento se deja intacta a proposito: cambiar la
@@ -2165,8 +2244,18 @@ async function guardarEdicionPago(id) {
   } catch (e) {
     console.error('Error editando pago:', e);
     showToast('❌ No se pudo actualizar. Intenta de nuevo.');
-  }
+  } finally { soltarCandado(); }
 }
+
+/* Candado unico para todas las escrituras iniciadas desde un formulario.
+   Sin el, un doble toque en "Agregar" creaba dos registros identicos. */
+let _guardando = false;
+function tomarCandado() {
+  if (_guardando) return false;
+  _guardando = true;
+  return true;
+}
+function soltarCandado() { _guardando = false; }
 
 let _pagoEnCurso = false;
 async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) {
@@ -2385,6 +2474,7 @@ async function guardarAsignaciones() {
   const selects = [...document.querySelectorAll('#asig-lista [data-asig]')];
   const cambios = selects.filter(sel => sel.value);
   if (!cambios.length) { showToast('⚠ Elige al menos una cuenta'); return; }
+  if (!tomarCandado()) return;
   try {
     for (const sel of cambios) {
       const tx = transactions.find(t => t.id === sel.dataset.asig);
@@ -2398,7 +2488,7 @@ async function guardarAsignaciones() {
   } catch (e) {
     console.error('Error asignando movimientos:', e);
     showToast('❌ No se pudo asignar. Intenta de nuevo.');
-  }
+  } finally { soltarCandado(); }
 }
 
 async function confirmBorrarMovimientoSuelto(txId) {
@@ -2455,6 +2545,7 @@ async function saveCuentaForm(existingId) {
     name, entidad,
     createdAt: existingId ? undefined : Date.now()
   };
+  if (!tomarCandado()) return;
   try {
     if (existingId) {
       const prev = cuentas.find(x => x.id === existingId) || {};
@@ -2480,7 +2571,7 @@ async function saveCuentaForm(existingId) {
   } catch (e) {
     console.error('Error guardando cuenta:', e);
     showToast('❌ No se pudo guardar. Intenta de nuevo.');
-  }
+  } finally { soltarCandado(); }
 }
 
 async function confirmDeleteCuenta(id) {
@@ -2623,9 +2714,11 @@ async function savePatrimonioForm(existingId) {
   const category = document.getElementById('pf-category').value;
   const notes = document.getElementById('pf-notes').value.trim();
   if (!name) { showToast('⚠ Ingresa un nombre'); return; }
-  if (!amount || amount <= 0) { showToast('⚠ Ingresa un monto válido'); return; }
+  const errMonto = validarMonto(amount);
+  if (errMonto) { showToast(errMonto); return; }
 
   const item = { id: existingId || uid(), kind: _patKind, name, amount, category, notes };
+  if (!tomarCandado()) return;
   try {
     await savePatrimonio(item);
     closeModal();
@@ -2634,7 +2727,7 @@ async function savePatrimonioForm(existingId) {
   } catch (e) {
     console.error('Error guardando patrimonio:', e);
     showToast('❌ No se pudo guardar. Intenta de nuevo.');
-  }
+  } finally { soltarCandado(); }
 }
 
 async function confirmDeletePatrimonio(id) {
@@ -2937,7 +3030,7 @@ function openTxForm(type, existing) {
       </div>
       <div class="form-group">
         <label class="form-label">Fecha *</label>
-        <input class="form-input" type="date" id="f-date" value="${t.date}">
+        <input class="form-input" type="date" id="f-date" value="${esc(t.date)}" min="2000-01-01" max="2100-12-31">
       </div>
     </div>
     <div class="form-group">
@@ -3001,8 +3094,10 @@ async function saveTxForm(type, existingId) {
   const notesEl = document.getElementById('f-notes');
   const notes = notesEl && notesEl.value.trim() ? notesEl.value.trim() : 'Sin descripción';
 
-  if (!amount || amount <= 0) { showToast('⚠ Ingresa un monto válido'); return; }
-  if (!date) { showToast('⚠ Ingresa la fecha'); return; }
+  const errMonto = validarMonto(amount);
+  if (errMonto) { showToast(errMonto); return; }
+  const errFecha = validarFecha(date);
+  if (errFecha) { showToast(errFecha); return; }
   const finalType = _typeSelected || type;
 
   // La cuenta digital solo se guarda en movimientos por transferencia y si
@@ -3014,15 +3109,16 @@ async function saveTxForm(type, existingId) {
   }
 
   const tx = { id: existingId || uid(), type: finalType, amount, date, category, account, notes, cuentaId };
+  if (!tomarCandado()) return;
   try {
     await saveTransaction(tx);
     closeModal();
     showToast(existingId ? '✏️ Transacción actualizada' : '✅ Transacción guardada');
     renderPage(currentPage);
   } catch (e) {
-    console.error('Error guardando transacción:', e);
+    console.error('Error guardando transaccion:', e);
     showToast('❌ No se pudo guardar. Intenta de nuevo.');
-  }
+  } finally { soltarCandado(); }
 }
 
 function openEditTx(id) {
@@ -3034,13 +3130,25 @@ function openEditTx(id) {
 }
 
 async function confirmDeleteTx(id) {
-  if (!(await appConfirm('¿Eliminar esta transacción? Esta acción no se puede deshacer.'))) return;
+  const tx = transactions.find(t => t.id === id);
+  if (!tx) return;
+  if (!(await appConfirm('¿Eliminar esta transaccion?'))) return;
+  const respaldo = Object.assign({}, tx);   // copia para poder restaurar
   try {
     await deleteTransaction(id);
-    showToast('🗑 Eliminado');
     renderPage(currentPage);
+    showToast('🗑 Eliminado', {
+      label: 'Deshacer',
+      onClick: async () => {
+        try {
+          await saveTransaction(respaldo);
+          renderPage(currentPage);
+          showToast('↩ Restaurado');
+        } catch (e) { reportarError('restaurar transaccion', e); }
+      }
+    });
   } catch (e) {
-    console.error('Error eliminando transacción:', e);
+    reportarError('eliminar transaccion', e);
     showToast('❌ No se pudo eliminar. Intenta de nuevo.');
   }
 }
@@ -3101,14 +3209,16 @@ async function saveFijoForm(existingId) {
   const diaPago = parseInt(document.getElementById('ff-diapago').value);
   const periodicidad = document.getElementById('ff-periodicidad').value;
   if (!name) { showToast('⚠ Ingresa un nombre'); return; }
-  if (!amount || amount <= 0) { showToast('⚠ Ingresa un monto válido'); return; }
-  if (!dias || dias <= 0) { showToast('⚠ Ingresa los días elegibles'); return; }
-  if (!diaPago || diaPago < 1 || diaPago > 31) { showToast('⚠ El día de pago debe estar entre 1 y 31'); return; }
+  const errMonto = validarMonto(amount);
+  if (errMonto) { showToast(errMonto); return; }
+  if (!Number.isFinite(dias) || dias < 1 || dias > 366) { showToast('⚠ Los dias elegibles deben estar entre 1 y 366'); return; }
+  if (!Number.isFinite(diaPago) || diaPago < 1 || diaPago > 31) { showToast('⚠ El dia de pago debe estar entre 1 y 31'); return; }
 
   // Al editar se conserva el historial de pagos ya registrado.
   const previo = existingId ? fijos.find(x => x.id === existingId) : null;
   const fijo = { id: existingId || uid(), name, amount, category, dias,
                  diaPago, periodicidad, pagos: (previo && previo.pagos) || [] };
+  if (!tomarCandado()) return;
   try {
     await saveFijo(fijo);
     closeModal();
@@ -3117,7 +3227,7 @@ async function saveFijoForm(existingId) {
   } catch (e) {
     console.error('Error guardando gasto fijo:', e);
     showToast('❌ No se pudo guardar. Intenta de nuevo.');
-  }
+  } finally { soltarCandado(); }
 }
 
 function openEditFijo(id) {
@@ -3234,7 +3344,9 @@ async function saveReconciliationForm() {
   const date = document.getElementById('rf-date').value;
   const notes = document.getElementById('rf-notes').value.trim();
   if (!amountRaw) { showToast('⚠ Ingresa el nuevo saldo real'); return; }
-  if (!date) { showToast('⚠ Ingresa la fecha'); return; }
+  if (amount > MONTO_MAX) { showToast('⚠ El saldo supera el maximo permitido'); return; }
+  const errFechaRec = validarFecha(date);
+  if (errFechaRec) { showToast(errFechaRec); return; }
 
   // Solo se guarda cuentaId si la cuenta existe y estamos en modo Digital.
   const cuentaId = (_reconAccount === 'transfer' && _reconCuentaId
@@ -3254,15 +3366,16 @@ async function saveReconciliationForm() {
     notes,
     createdAt: Date.now()
   };
+  if (!tomarCandado()) return;
   try {
     await saveBalanceRecord(rec);
     closeModal();
     showToast(`✅ Conciliado · Diferencia: ${diff >= 0 ? '+' : ''}${fmt(diff)}`);
     renderPage(currentPage);
   } catch (e) {
-    console.error('Error guardando conciliación:', e);
-    showToast('❌ No se pudo guardar la conciliación. Intenta de nuevo.');
-  }
+    console.error('Error guardando conciliacion:', e);
+    showToast('❌ No se pudo guardar la conciliacion. Intenta de nuevo.');
+  } finally { soltarCandado(); }
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -3281,10 +3394,19 @@ function exportCSV() {
     t.id, t.type, t.amount, t.date, t.category, t.account,
     t.cuentaId ? cuentaName(t.cuentaId) : '', t.notes || ''
   ]);
-  const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv = [headers, ...rows].map(r => r.map(celdaCSV).join(',')).join('\r\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   download(blob, 'kasa-transacciones-' + todayISO() + '.csv');
   showToast('📊 CSV descargado');
+}
+
+/* Neutraliza la inyeccion de formulas en hojas de calculo: Excel y
+   Sheets ejecutan toda celda que empiece por = + - @ o control chars.
+   Se antepone un apostrofo, que la hoja trata como texto literal. */
+function celdaCSV(v) {
+  let txt = String(v == null ? '' : v);
+  if (/^[=+\-@\t\r]/.test(txt)) txt = "'" + txt;
+  return '"' + txt.replace(/"/g, '""') + '"';
 }
 
 function download(blob, name) {
@@ -3304,19 +3426,69 @@ async function importJSON(file) {
   const text = await file.text();
   try {
     const data = JSON.parse(text);
-    if (!data || !Array.isArray(data.transactions)) throw new Error('Formato inválido');
-    // Cada coleccion debe ser un arreglo; si no, se descarta en vez de romper la app.
-    const comoArray = v => Array.isArray(v) ? v : [];
+    if (!data || !Array.isArray(data.transactions)) throw new Error('Formato invalido');
+
+    // Saneado: cada registro se reconstruye campo por campo. Lo que no
+    // encaje se descarta, de modo que un archivo manipulado no pueda
+    // inyectar propiedades ni importes fuera de rango.
+    const LIMITE = 20000;                       // tope de registros por coleccion
+    const comoArray = v => Array.isArray(v) ? v.slice(0, LIMITE) : [];
+    const txt = (v, max) => String(v == null ? '' : v).slice(0, max || 120);
+    const num = v => { const n = parseMoney(v); return Number.isFinite(n) && n >= 0 ? Math.min(n, MONTO_MAX) : 0; };
+    const fechaOk = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : todayISO();
+    const TIPOS = ['income', 'expense', 'saving'];
     const ok = await appConfirm(
       `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos y ${(data.balances||[]).length} conciliaciones? Esto reemplazará los datos actuales.`,
       'Importar'
     );
     if (!ok) return;
-    transactions = data.transactions.filter(t => t && t.id);
-    fijos = comoArray(data.fijos).filter(f => f && f.id);
-    balances = comoArray(data.balances).filter(b => b && b.id);
-    patrimonio = comoArray(data.patrimonio).filter(p => p && p.id);
-    cuentas = comoArray(data.cuentas).filter(c => c && c.id);
+    cuentas = comoArray(data.cuentas).filter(c => c && c.id).map(c => ({
+      id: txt(c.id, 40), name: txt(c.name, 60) || 'Cuenta', entidad: txt(c.entidad, 60),
+      createdAt: Number(c.createdAt) || Date.now()
+    }));
+    const idsCuenta = new Set(cuentas.map(c => c.id));
+
+    transactions = comoArray(data.transactions).filter(t => t && t.id).map(t => ({
+      id: txt(t.id, 40),
+      type: TIPOS.includes(t.type) ? t.type : 'expense',
+      amount: num(t.amount),
+      date: fechaOk(t.date),
+      category: txt(t.category, 60) || 'Otros gastos',
+      account: t.account === 'transfer' ? 'transfer' : 'efectivo',
+      // Referencia a cuenta solo si la cuenta existe: evita huerfanos.
+      cuentaId: idsCuenta.has(t.cuentaId) ? t.cuentaId : '',
+      notes: txt(t.notes, 200)
+    })).filter(t => t.amount > 0);
+
+    fijos = comoArray(data.fijos).filter(f => f && f.id).map(f => ({
+      id: txt(f.id, 40), name: txt(f.name, 80) || 'Gasto fijo',
+      amount: num(f.amount), category: txt(f.category, 60) || 'Otros fijos',
+      dias: Math.min(Math.max(parseInt(f.dias) || 30, 1), 366),
+      diaPago: Math.min(Math.max(parseInt(f.diaPago) || 1, 1), 31),
+      periodicidad: PERIODICIDADES.some(p => p.id === f.periodicidad) ? f.periodicidad : 'mensual',
+      pagos: Array.isArray(f.pagos) ? f.pagos.slice(0, 500).map(p => ({
+        fecha: fechaOk(p && p.fecha), vencia: txt(p && p.vencia, 10),
+        metodo: (p && p.metodo) === 'digital' ? 'digital' : 'efectivo',
+        cuentaId: idsCuenta.has(p && p.cuentaId) ? p.cuentaId : '',
+        txId: txt(p && p.txId, 40), registradoEl: txt(p && p.registradoEl, 10),
+        sinMovimiento: !!(p && p.sinMovimiento)
+      })) : []
+    })).filter(f => f.amount > 0);
+
+    balances = comoArray(data.balances).filter(b => b && b.id).map(b => ({
+      id: txt(b.id, 40), account: b.account === 'transfer' ? 'transfer' : 'efectivo',
+      cuentaId: idsCuenta.has(b.cuentaId) ? b.cuentaId : '',
+      previousAmount: num(b.previousAmount), amount: num(b.amount),
+      diff: Number.isFinite(Number(b.diff)) ? Number(b.diff) : 0,
+      date: fechaOk(b.date), notes: txt(b.notes, 200),
+      createdAt: Number(b.createdAt) || Date.now()
+    }));
+
+    patrimonio = comoArray(data.patrimonio).filter(p => p && p.id).map(p => ({
+      id: txt(p.id, 40), kind: p.kind === 'pasivo' ? 'pasivo' : 'activo',
+      name: txt(p.name, 80) || 'Registro', amount: num(p.amount),
+      category: txt(p.category, 60) || 'Otro activo', notes: txt(p.notes, 200)
+    })).filter(p => p.amount > 0);
     await Promise.all(transactions.map(t => dbPut('transactions', t)));
     await Promise.all(fijos.map(f => dbPut('fijos', f)));
     await Promise.all(balances.map(b => dbPut('balances', b)));
@@ -3642,7 +3814,7 @@ function exportReportCSV() {
   push('Resumen', rec.mensaje);
   rec.acciones.forEach((a, i) => push('Acción ' + (i + 1), a));
 
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const csv = rows.map(r => r.map(celdaCSV).join(',')).join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
   download(blob, 'kasa-eeff-' + todayISO() + '.csv');
   showToast('📈 Reporte EEFF (CSV) descargado');
@@ -3672,13 +3844,40 @@ function toggleTheme() {
    TOAST
 ───────────────────────────────────────────────────────── */
 let toastTimer;
-function showToast(msg) {
+function showToast(msg, accion) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
+  el.textContent = '';
+  el.appendChild(document.createTextNode(msg));   // textNode: nunca interpreta HTML
+
+  if (accion && typeof accion.onClick === 'function') {
+    const btn = document.createElement('button');
+    btn.textContent = accion.label || 'Deshacer';
+    btn.style.cssText = 'margin-left:.75rem;font-weight:700;color:var(--accent);' +
+                        'background:none;border:none;font-family:inherit;font-size:inherit;cursor:pointer';
+    btn.onclick = () => { el.classList.remove('show'); accion.onClick(); };
+    el.appendChild(btn);
+    el.style.pointerEvents = 'auto';
+  } else {
+    el.style.pointerEvents = 'none';
+  }
+
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  toastTimer = setTimeout(() => el.classList.remove('show'), accion ? 6000 : 2500);
 }
+
+/* Red de seguridad: ningun fallo queda invisible, pero al usuario solo
+   se le muestra un mensaje generico (el detalle va a la consola). */
+let _ultimoErrorMostrado = 0;
+function reportarError(origen, detalle) {
+  console.error('[Kasa]', origen, detalle);
+  const ahora = Date.now();
+  if (ahora - _ultimoErrorMostrado < 4000) return;   // evita avalancha de toasts
+  _ultimoErrorMostrado = ahora;
+  try { showToast('⚠ Ocurrio un error inesperado. Tus datos estan a salvo.'); } catch (e) {}
+}
+window.addEventListener('error', e => reportarError('error', e.error || e.message));
+window.addEventListener('unhandledrejection', e => reportarError('promesa', e.reason));
 
 /* ─────────────────────────────────────────────────────────
    SIDEBAR
@@ -3752,6 +3951,17 @@ document.getElementById('next-month').addEventListener('click', () => {
   if (el) el.addEventListener('click', openSidebar);
 });
 document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
+
+// Busqueda de transacciones (debounce: evita re-render en cada tecla)
+let _debounceBusqueda;
+document.getElementById('tx-search').addEventListener('input', e => {
+  _txBusqueda = e.target.value;
+  clearTimeout(_debounceBusqueda);
+  _debounceBusqueda = setTimeout(() => {
+    renderTransactions();
+    e.target.focus();     // el re-render no debe robar el foco al escribir
+  }, 200);
+});
 
 // Export
 document.getElementById('export-json').addEventListener('click', exportJSON);
