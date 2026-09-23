@@ -1,0 +1,11 @@
+# Respaldos locales del HTML original (no deben publicarse en el sitio)
+_respaldo_original/
+
+# Sistema operativo
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editores
+.vscode/
+.idea/

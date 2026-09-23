@@ -6,6 +6,12 @@ desde GitHub Pages. Sin backend, sin cuentas: todos tus datos viven en **tu disp
 
 ## ✨ Funciones
 - Ingresos, gastos, ahorros, gastos fijos y conciliación de saldos.
+- **Cuentas Digitales**: reparte tu saldo digital entre tus cuentas reales
+  (Nequi, Bancolombia, Daviplata…). Asigna cada transferencia a una cuenta,
+  concilia su saldo real y consulta el desglose desde el Dashboard.
+  Los movimientos sin asignar se agrupan y quedan siempre visibles.
+- **Formato de moneda**: todos los campos de monto muestran separador de
+  miles mientras escribes (`24194` → `24.194`) y se despliegan como `$ 24.194`.
 - **Patrimonio**: registro de activos y pasivos para tu Balance General.
 - **Reportes EEFF** descargables:
   - **Estado de Resultados** (Ingresos − Egresos = Flujo Neto).

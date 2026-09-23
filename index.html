@@ -576,6 +576,9 @@ a{text-decoration:none;color:inherit}
     <div class="nav-item" data-page="ahorros">
       <span class="icon">💰</span> Ahorros
     </div>
+    <div class="nav-item" data-page="cuentas">
+      <span class="icon">💳</span> Cuentas Digitales
+    </div>
     <div class="nav-item" data-page="patrimonio">
       <span class="icon">🏦</span> Patrimonio
     </div>
@@ -652,6 +655,15 @@ a{text-decoration:none;color:inherit}
         <div class="s-val" id="stat-digital-total">$0</div>
         <div class="s-diff zero" id="stat-digital-diff"></div>
       </div>
+    </div>
+
+    <!-- Desglose de cuentas digitales -->
+    <div class="card card-sm" id="dash-cuentas-card" style="display:none;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+        <div style="font-weight:600;font-size:.85rem">💳 Desglose digital</div>
+        <span style="font-size:.78rem;color:var(--text2);cursor:pointer" onclick="goToPage('cuentas')">Gestionar →</span>
+      </div>
+      <div id="dash-cuentas-list"></div>
     </div>
 
     <!-- Meta diaria de gastos fijos (suma de todos los gastos fijos) -->
@@ -766,6 +778,29 @@ a{text-decoration:none;color:inherit}
 
     <div class="section-title" style="margin-bottom:.75rem">Movimientos de ahorro</div>
     <div id="ahorros-list" class="tx-list"></div>
+  </section>
+
+  <!-- CUENTAS DIGITALES (desglose del saldo digital) -->
+  <section class="page" id="page-cuentas">
+    <div class="page-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <button class="icon-btn hamburger" id="hamburger9">☰</button>
+        <h1>Cuentas Digitales</h1>
+      </div>
+      <button class="icon-btn" id="add-btn-cuenta">＋</button>
+    </div>
+    <p class="muted" style="margin-bottom:1rem">Reparte tu saldo digital entre tus cuentas reales (Nequi, Bancolombia, Daviplata…). Asigna cada transferencia a una cuenta y concilia su saldo real cuando quieras.</p>
+
+    <div class="goal-card" id="cuentas-total-card">
+      <div class="g-label">💳 Total Digital</div>
+      <div class="g-amount" id="cuentas-total-val">$0</div>
+      <div class="g-sub" id="cuentas-total-sub">Suma de todas tus cuentas digitales</div>
+    </div>
+
+    <div class="section-title" style="margin-bottom:.75rem">Mis cuentas</div>
+    <div id="cuentas-list"></div>
+
+    <div id="cuentas-unassigned" style="margin-top:1rem"></div>
   </section>
 
   <!-- PATRIMONIO (Activos y Pasivos) -->
@@ -1003,7 +1038,7 @@ a{text-decoration:none;color:inherit}
    STORAGE — IndexedDB with LocalStorage fallback
 ───────────────────────────────────────────────────────── */
 const DB_NAME = 'kasa_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 let db = null;
 
 async function initDB() {
@@ -1024,6 +1059,8 @@ async function initDB() {
             d.createObjectStore('balances', { keyPath: 'id' });
           if (!d.objectStoreNames.contains('patrimonio'))
             d.createObjectStore('patrimonio', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('cuentas'))
+            d.createObjectStore('cuentas', { keyPath: 'id' });
         };
       } catch (innerErr) { reject(innerErr); }
     });
@@ -1037,7 +1074,7 @@ async function initDB() {
 /* Respaldo en memoria: si IndexedDB Y localStorage fallan (por ejemplo dentro
    de una vista previa en sandbox o un WebView restringido), la app sigue
    funcionando durante la sesión en lugar de que los botones "no hagan nada". */
-const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [] };
+const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [], cuentas: [] };
 
 function safeLSGet(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -1126,6 +1163,7 @@ let transactions = [];
 let fijos = [];
 let balances = [];
 let patrimonio = [];
+let cuentas = [];   // Cuentas digitales (desglose del saldo "transfer")
 
 const INCOME_CATS = ['Salario', 'Freelance', 'Ventas', 'Inversiones', 'Regalos', 'Otros ingresos'];
 const EXPENSE_CATS = ['Comida', 'Transporte', 'Salud', 'Entretenimiento', 'Ropa', 'Café/Snacks', 'Tecnología', 'Educación', 'Belleza', 'Hogar', 'Otros gastos'];
@@ -1174,17 +1212,22 @@ function accountTotals() {
 ───────────────────────────────────────────────────────── */
 const ACCOUNT_LABELS = { efectivo: 'Efectivo', transfer: 'Digital' };
 
-function lastReconciliation(account) {
-  const arr = balances.filter(b => b.account === account)
+/* Última conciliación de una cuenta. Si se pasa cuentaId se busca la de esa
+   cuenta digital concreta; si no, la del saldo agregado (registros sin
+   cuentaId, que es como quedaron todos los históricos). */
+function lastReconciliation(account, cuentaId) {
+  const arr = balances
+    .filter(b => b.account === account && (cuentaId ? b.cuentaId === cuentaId : !b.cuentaId))
     .sort((a, b) => new Date(b.date) - new Date(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
   return arr.length ? arr[0] : null;
 }
 
 // Saldo anterior de referencia: usa la última conciliación guardada;
 // si nunca se ha conciliado, usa el saldo calculado desde las transacciones.
-function previousBalanceFor(account) {
-  const last = lastReconciliation(account);
+function previousBalanceFor(account, cuentaId) {
+  const last = lastReconciliation(account, cuentaId);
   if (last) return last.amount;
+  if (cuentaId) return cuentaDerivedBalance(cuentaId);
   const acc = accountTotals();
   return account === 'efectivo' ? acc.cash : acc.digital;
 }
@@ -1210,6 +1253,7 @@ async function loadData() {
   fijos = await dbGet('fijos');
   balances = await dbGet('balances');
   patrimonio = await dbGet('patrimonio');
+  cuentas = await dbGet('cuentas');
 }
 
 async function saveTransaction(tx) {
@@ -1232,6 +1276,73 @@ async function saveFijo(fijo) {
 async function deleteFijo(id) {
   await dbDelete('fijos', id);
   fijos = fijos.filter(x => x.id !== id);
+}
+
+/* ─────────────────────────────────────────────────────────
+   CUENTAS DIGITALES — desglose del saldo "transfer"
+   El total digital se reparte entre las cuentas que el usuario
+   registre (Nequi, Bancolombia, Daviplata…). Los movimientos
+   sin cuenta asignada quedan en la bolsa "Sin asignar", de modo
+   que los datos históricos siguen cuadrando sin migración.
+───────────────────────────────────────────────────────── */
+async function saveCuenta(item) {
+  await dbPut('cuentas', item);
+  const idx = cuentas.findIndex(x => x.id === item.id);
+  if (idx >= 0) cuentas[idx] = item; else cuentas.push(item);
+}
+
+async function deleteCuenta(id) {
+  await dbDelete('cuentas', id);
+  cuentas = cuentas.filter(x => x.id !== id);
+}
+
+function cuentaName(id) {
+  const c = cuentas.find(x => x.id === id);
+  return c ? c.name : 'Sin asignar';
+}
+
+// Saldo derivado solo de las transacciones asignadas a la cuenta.
+function cuentaDerivedBalance(id) {
+  const arr = transactions.filter(t => t.account === 'transfer' && t.cuentaId === id);
+  const inc = arr.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const exp = arr.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const sav = arr.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
+  return inc - exp - sav;
+}
+
+// Suma de los ajustes de conciliación propios de esa cuenta.
+function cuentaReconDiff(id) {
+  return balances
+    .filter(b => b.account === 'transfer' && b.cuentaId === id)
+    .reduce((s, b) => s + b.diff, 0);
+}
+
+// Saldo mostrado: movimientos asignados + ajustes conciliados de la cuenta.
+// Tras conciliar, este saldo equivale al saldo real declarado.
+function cuentaBalance(id) {
+  return cuentaDerivedBalance(id) + cuentaReconDiff(id);
+}
+
+/* Desglose completo del dinero digital. */
+function digitalBreakdown() {
+  const items = cuentas.map(c => ({
+    id: c.id, name: c.name, entidad: c.entidad || '', balance: cuentaBalance(c.id)
+  })).sort((a, b) => b.balance - a.balance);
+
+  const digitalDerived = accountTotals().digital;
+  const asignadoDerived = cuentas.reduce((s, c) => s + cuentaDerivedBalance(c.id), 0);
+  const sinAsignar = digitalDerived - asignadoDerived;   // movimientos sin cuenta
+  const totalCuentas = items.reduce((s, i) => s + i.balance, 0);
+
+  return { items, sinAsignar, totalCuentas, total: totalCuentas + sinAsignar };
+}
+
+/* <option> de cuentas digitales para los formularios. */
+function cuentaOptionsHTML(selectedId) {
+  const opts = cuentas.map(c =>
+    `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${c.name}</option>`
+  ).join('');
+  return `<option value="" ${!selectedId ? 'selected' : ''}>— Sin asignar —</option>` + opts;
 }
 
 async function savePatrimonio(item) {
@@ -1289,6 +1400,7 @@ function renderPage(page) {
   if (page === 'transacciones') renderTransactions();
   if (page === 'fijos') renderFijos();
   if (page === 'ahorros') renderAhorros();
+  if (page === 'cuentas') renderCuentas();
   if (page === 'patrimonio') renderPatrimonio();
   if (page === 'conciliacion') renderConciliacion();
   if (page === 'insights') renderInsights();
@@ -1299,7 +1411,51 @@ function renderPage(page) {
    FORMATTERS
 ───────────────────────────────────────────────────────── */
 function fmt(n) {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n || 0);
+}
+
+/* ── FORMATO DE MONTOS EN INPUTS ───────────────────────────
+   Los campos de dinero dejan de ser <input type="number"> (que
+   muestra "24194" en crudo) y pasan a ser texto con máscara en
+   vivo: el usuario ve "24.194" mientras escribe y el teclado
+   numérico del móvil se mantiene vía inputmode="numeric".
+──────────────────────────────────────────────────────────── */
+
+// "24.194" sin símbolo — para precargar inputs al editar.
+function fmtPlain(n) {
+  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(n || 0);
+}
+
+// Convierte cualquier texto con puntos/símbolos a número entero.
+function parseMoney(v) {
+  if (typeof v === 'number') return v;
+  const digits = String(v == null ? '' : v).replace(/\D/g, '');
+  return digits ? parseInt(digits, 10) : 0;
+}
+
+// Lee un input de dinero por id y devuelve su valor numérico.
+function moneyVal(id) {
+  const el = document.getElementById(id);
+  return el ? parseMoney(el.value) : 0;
+}
+
+/* Aplica la máscara a todos los inputs [data-money] de un contenedor.
+   Se llama tras renderizar cada modal. Es idempotente. */
+function initMoneyInputs(root) {
+  (root || document).querySelectorAll('input[data-money]').forEach(el => {
+    if (el.dataset.masked === '1') return;
+    el.dataset.masked = '1';
+    el.addEventListener('input', () => {
+      const digits = el.value.replace(/\D/g, '');
+      // Reformatea solo si cambia, para no mover el cursor sin necesidad.
+      const next = digits ? fmtPlain(parseInt(digits, 10)) : '';
+      if (el.value !== next) {
+        el.value = next;
+        // Cursor siempre al final: es lo natural al teclear importes.
+        try { el.setSelectionRange(next.length, next.length); } catch (e) {}
+      }
+    });
+  });
 }
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -1351,6 +1507,9 @@ function renderDashboard() {
   renderAccountDiffBadge('stat-cash-diff', 'efectivo');
   renderAccountDiffBadge('stat-digital-diff', 'transfer');
 
+  // Desglose de cuentas digitales
+  renderDashCuentas();
+
   const fixedTotal = fijos.reduce((s,f) => s+f.amount, 0);
   document.getElementById('stat-fijos-pending').textContent = fmt(fixedTotal);
 
@@ -1394,6 +1553,27 @@ function renderDashboard() {
   }
   list.innerHTML = sorted.map(t => txItemHTML(t, false)).join('');
   attachTxEvents(list);
+}
+
+/* Mini desglose digital en el Dashboard (solo si hay cuentas creadas). */
+function renderDashCuentas() {
+  const card = document.getElementById('dash-cuentas-card');
+  if (!cuentas.length) { card.style.display = 'none'; return; }
+
+  const bd = digitalBreakdown();
+  card.style.display = 'block';
+  const rows = bd.items.map(c => `
+    <div class="rule-labels" style="margin-bottom:.4rem">
+      <span>${c.name}</span><strong>${fmt(c.balance)}</strong>
+    </div>`).join('');
+  const extra = Math.round(bd.sinAsignar) !== 0 ? `
+    <div class="rule-labels" style="margin-bottom:.4rem;color:var(--text3)">
+      <span>Sin asignar</span><strong style="color:var(--warn)">${fmt(bd.sinAsignar)}</strong>
+    </div>` : '';
+  document.getElementById('dash-cuentas-list').innerHTML = rows + extra + `
+    <div class="rule-labels" style="padding-top:.5rem;border-top:1px solid var(--border)">
+      <span><strong>Total digital</strong></span><strong>${fmt(bd.total)}</strong>
+    </div>`;
 }
 
 function renderAccountDiffBadge(elId, account) {
@@ -1444,7 +1624,7 @@ function txItemHTML(t, showActions) {
   const dateStr = d.toLocaleDateString('es-CO', {day:'2-digit', month:'short'});
   const accountBadge = t.account === 'efectivo'
     ? '<span class="badge efectivo">Efectivo</span>'
-    : '<span class="badge transfer">Transferencia</span>';
+    : `<span class="badge transfer">${t.cuentaId ? cuentaName(t.cuentaId) : 'Transferencia'}</span>`;
   const actions = showActions ? `
     <div class="tx-actions">
       <button class="tx-btn edit" data-id="${t.id}" title="Editar">✏️</button>
@@ -1533,6 +1713,156 @@ function renderAhorros() {
 }
 
 /* ─────────────────────────────────────────────────────────
+   CUENTAS DIGITALES — página
+───────────────────────────────────────────────────────── */
+function renderCuentas() {
+  const bd = digitalBreakdown();
+  document.getElementById('cuentas-total-val').textContent = fmt(bd.total);
+  document.getElementById('cuentas-total-sub').textContent = cuentas.length
+    ? `${cuentas.length} cuenta${cuentas.length > 1 ? 's' : ''} · ${fmt(bd.totalCuentas)} asignado`
+    : 'Aún no has creado cuentas digitales';
+
+  const list = document.getElementById('cuentas-list');
+  if (!cuentas.length) {
+    list.innerHTML = '<div class="empty"><div class="e-icon">💳</div>Sin cuentas digitales. Toca + para crear la primera (ej: Nequi, Bancolombia).</div>';
+  } else {
+    list.innerHTML = bd.items.map(c => {
+      const last = lastReconciliation('transfer', c.id);
+      const sub = last
+        ? `Conciliada · última dif. ${last.diff >= 0 ? '+' : ''}${fmt(last.diff)}`
+        : 'Sin conciliar aún';
+      return `
+      <div class="fijo-item">
+        <div class="fijo-info">
+          <div class="f-name">${c.name}</div>
+          <div class="f-sub">${c.entidad ? c.entidad + ' · ' : ''}${sub}</div>
+        </div>
+        <div class="fijo-amount" style="color:${c.balance >= 0 ? 'var(--blue)' : 'var(--danger)'}">${fmt(c.balance)}</div>
+        <div class="tx-actions" style="margin-left:.5rem">
+          <button class="tx-btn recon" data-id="${c.id}" title="Conciliar saldo">⚖️</button>
+          <button class="tx-btn edit" data-id="${c.id}" title="Editar">✏️</button>
+          <button class="tx-btn del" data-id="${c.id}" title="Eliminar">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('.tx-btn.recon').forEach(b => {
+      b.onclick = () => openReconciliationModal('transfer', b.dataset.id);
+    });
+    list.querySelectorAll('.tx-btn.edit').forEach(b => {
+      b.onclick = () => openCuentaForm(cuentas.find(x => x.id === b.dataset.id));
+    });
+    list.querySelectorAll('.tx-btn.del').forEach(b => {
+      b.onclick = () => confirmDeleteCuenta(b.dataset.id);
+    });
+  }
+
+  // Bolsa de movimientos digitales sin cuenta asignada.
+  const un = document.getElementById('cuentas-unassigned');
+  if (Math.round(bd.sinAsignar) !== 0) {
+    un.innerHTML = `
+      <div class="ant-alert">
+        <div class="ant-icon">📥</div>
+        <div>
+          <div style="font-weight:600;font-size:.85rem">Sin asignar: ${fmt(bd.sinAsignar)}</div>
+          <div style="font-size:.78rem;color:var(--text2)">
+            Hay movimientos digitales que no pertenecen a ninguna cuenta. Edítalos desde
+            Transacciones y elige su cuenta para completar el desglose.
+          </div>
+        </div>
+      </div>`;
+  } else {
+    un.innerHTML = '';
+  }
+}
+
+function openCuentaForm(existing) {
+  const c = existing || { name: '', entidad: '', notes: '' };
+  openModal((existing ? 'Editar' : 'Nueva') + ' cuenta digital', `
+    <div class="form-group">
+      <label class="form-label">Nombre de la cuenta *</label>
+      <input class="form-input" type="text" id="cf-name" placeholder="Ej: Nequi principal" value="${c.name}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Entidad (opcional)</label>
+      <input class="form-input" type="text" id="cf-entidad" placeholder="Ej: Bancolombia" value="${c.entidad || ''}">
+    </div>
+    ${existing ? '' : `
+    <div class="form-group">
+      <label class="form-label">Saldo inicial (opcional)</label>
+      <input class="form-input" type="text" inputmode="numeric" data-money id="cf-saldo" placeholder="0">
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+        Se registra como una conciliación inicial para fijar el saldo de la cuenta.
+      </div>
+    </div>`}
+    <button class="btn-primary" onclick="saveCuentaForm('${existing?.id || ''}')">
+      ${existing ? 'Guardar cambios' : 'Crear cuenta'}
+    </button>
+  `);
+}
+
+async function saveCuentaForm(existingId) {
+  const name = document.getElementById('cf-name').value.trim();
+  const entidad = document.getElementById('cf-entidad').value.trim();
+  if (!name) { showToast('⚠ Ingresa el nombre de la cuenta'); return; }
+
+  const cuenta = {
+    id: existingId || uid(),
+    name, entidad,
+    createdAt: existingId ? undefined : Date.now()
+  };
+  try {
+    if (existingId) {
+      const prev = cuentas.find(x => x.id === existingId) || {};
+      cuenta.createdAt = prev.createdAt;
+    }
+    await saveCuenta(cuenta);
+
+    // Saldo inicial → conciliación de apertura (solo al crear).
+    if (!existingId) {
+      const saldo = moneyVal('cf-saldo');
+      if (saldo > 0) {
+        await saveBalanceRecord({
+          id: uid(), account: 'transfer', cuentaId: cuenta.id,
+          previousAmount: 0, amount: saldo, diff: saldo,
+          date: new Date().toISOString().slice(0, 10),
+          notes: 'Saldo inicial de la cuenta', createdAt: Date.now()
+        });
+      }
+    }
+    closeModal();
+    showToast(existingId ? '✏️ Cuenta actualizada' : '✅ Cuenta creada');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error guardando cuenta:', e);
+    showToast('❌ No se pudo guardar. Intenta de nuevo.');
+  }
+}
+
+async function confirmDeleteCuenta(id) {
+  const asignadas = transactions.filter(t => t.cuentaId === id).length;
+  const msg = asignadas
+    ? `Esta cuenta tiene ${asignadas} movimiento(s) asignado(s). Si la eliminas, esos movimientos pasarán a "Sin asignar" (no se borran). ¿Continuar?`
+    : '¿Eliminar esta cuenta digital? Esta acción no se puede deshacer.';
+  if (!(await appConfirm(msg))) return;
+  try {
+    // Libera los movimientos y limpia las conciliaciones de la cuenta para
+    // que su saldo no siga contando en el ajuste global.
+    const huerfanas = transactions.filter(t => t.cuentaId === id);
+    for (const t of huerfanas) { t.cuentaId = ''; await dbPut('transactions', t); }
+    const recons = balances.filter(b => b.cuentaId === id);
+    for (const b of recons) await deleteBalanceRecord(b.id);
+
+    await deleteCuenta(id);
+    showToast('🗑 Cuenta eliminada');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error eliminando cuenta:', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
    PATRIMONIO (Activos y Pasivos)
 ───────────────────────────────────────────────────────── */
 function renderPatrimonio() {
@@ -1612,7 +1942,8 @@ function openPatrimonioForm(existing, defaultKind) {
     </div>
     <div class="form-group">
       <label class="form-label">Monto actual *</label>
-      <input class="form-input" type="number" id="pf-amount" placeholder="0" value="${p.amount}" min="0">
+      <input class="form-input" type="text" inputmode="numeric" data-money id="pf-amount"
+             placeholder="0" value="${p.amount ? fmtPlain(p.amount) : ''}">
     </div>
     <div class="form-group">
       <label class="form-label">Categoría *</label>
@@ -1644,7 +1975,7 @@ function fillPatCategories(selected) {
 
 async function savePatrimonioForm(existingId) {
   const name = document.getElementById('pf-name').value.trim();
-  const amount = parseFloat(document.getElementById('pf-amount').value);
+  const amount = moneyVal('pf-amount');
   const category = document.getElementById('pf-category').value;
   const notes = document.getElementById('pf-notes').value.trim();
   if (!name) { showToast('⚠ Ingresa un nombre'); return; }
@@ -1712,7 +2043,7 @@ function renderConciliacion() {
     <div class="recon-item">
       <div class="ri-icon">${b.account === 'efectivo' ? '💵' : '💳'}</div>
       <div class="ri-info">
-        <div class="ri-main">${ACCOUNT_LABELS[b.account]} · ${dateStr}</div>
+        <div class="ri-main">${ACCOUNT_LABELS[b.account]}${b.cuentaId ? ' · ' + cuentaName(b.cuentaId) : ''} · ${dateStr}</div>
         <div class="ri-sub">${fmt(b.previousAmount)} → ${fmt(b.amount)}${b.notes ? ' · ' + b.notes : ''}</div>
       </div>
       <div class="ri-diff" style="color:${color}">${sign}${fmt(b.diff)}</div>
@@ -1839,8 +2170,10 @@ let modalMode = null;  // 'tx-income' | 'tx-expense' | 'fijo' | 'quick'
 
 function openModal(titleText, content) {
   document.getElementById('modal-title-text').textContent = titleText;
-  document.getElementById('modal-content').innerHTML = content;
+  const box = document.getElementById('modal-content');
+  box.innerHTML = content;
   document.getElementById('modal-overlay').classList.add('open');
+  initMoneyInputs(box);   // activa la máscara de miles en los campos de dinero
 }
 
 function closeModal() {
@@ -1922,7 +2255,8 @@ function openTxForm(type, existing) {
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Monto *</label>
-        <input class="form-input" type="number" id="f-amount" placeholder="0" value="${t.amount}" min="0">
+        <input class="form-input" type="text" inputmode="numeric" data-money id="f-amount"
+               placeholder="0" value="${t.amount ? fmtPlain(t.amount) : ''}">
       </div>
       <div class="form-group">
         <label class="form-label">Fecha *</label>
@@ -1942,6 +2276,15 @@ function openTxForm(type, existing) {
         <div class="tab-switch-btn ${t.account==='transfer'?'active':''}" id="sw-bank" onclick="switchAccount('transfer')">🏦 Transferencia</div>
       </div>
     </div>
+    <div class="form-group" id="cuenta-group" style="display:${t.account==='transfer'?'block':'none'}">
+      <label class="form-label">¿En qué cuenta digital?</label>
+      <select class="form-input" id="f-cuenta">${cuentaOptionsHTML(t.cuentaId)}</select>
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+        ${cuentas.length
+          ? 'Asigna el movimiento para ver el desglose por cuenta.'
+          : 'Aún no tienes cuentas digitales. Créalas en la sección 💳 Cuentas.'}
+      </div>
+    </div>
     <div class="form-group" id="notes-group">
       <label class="form-label">Descripción (opcional)</label>
       <input class="form-input" type="text" id="f-notes" placeholder="Sin descripción" value="${t.notes||''}">
@@ -1957,6 +2300,9 @@ function switchAccount(acc) {
   _accountSelected = acc;
   document.querySelectorAll('#sw-cash, #sw-bank').forEach(el => el.classList.remove('active'));
   document.getElementById(acc === 'efectivo' ? 'sw-cash' : 'sw-bank').classList.add('active');
+  // El desglose por cuenta digital solo aplica a movimientos por transferencia.
+  const grp = document.getElementById('cuenta-group');
+  if (grp) grp.style.display = acc === 'transfer' ? 'block' : 'none';
 }
 
 let _typeSelected = 'income';
@@ -1971,7 +2317,7 @@ function switchType(type) {
 }
 
 async function saveTxForm(type, existingId) {
-  const amount = parseFloat(document.getElementById('f-amount').value);
+  const amount = moneyVal('f-amount');
   const date = document.getElementById('f-date').value;
   const category = document.getElementById('f-category').value;
   const account = _accountSelected;
@@ -1982,7 +2328,15 @@ async function saveTxForm(type, existingId) {
   if (!date) { showToast('⚠ Ingresa la fecha'); return; }
   const finalType = _typeSelected || type;
 
-  const tx = { id: existingId || uid(), type: finalType, amount, date, category, account, notes };
+  // La cuenta digital solo se guarda en movimientos por transferencia y si
+  // la cuenta sigue existiendo (evita referencias huérfanas tras borrarla).
+  const cuentaSel = document.getElementById('f-cuenta');
+  let cuentaId = '';
+  if (account === 'transfer' && cuentaSel && cuentaSel.value) {
+    if (cuentas.some(c => c.id === cuentaSel.value)) cuentaId = cuentaSel.value;
+  }
+
+  const tx = { id: existingId || uid(), type: finalType, amount, date, category, account, notes, cuentaId };
   try {
     await saveTransaction(tx);
     closeModal();
@@ -2024,7 +2378,8 @@ function openFijoForm(existing) {
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Monto mensual *</label>
-        <input class="form-input" type="number" id="ff-amount" placeholder="0" value="${f.amount}" min="0">
+        <input class="form-input" type="text" inputmode="numeric" data-money id="ff-amount"
+               placeholder="0" value="${f.amount ? fmtPlain(f.amount) : ''}">
       </div>
       <div class="form-group">
         <label class="form-label">Días elegibles *</label>
@@ -2045,7 +2400,7 @@ function openFijoForm(existing) {
 
 async function saveFijoForm(existingId) {
   const name = document.getElementById('ff-name').value.trim();
-  const amount = parseFloat(document.getElementById('ff-amount').value);
+  const amount = moneyVal('ff-amount');
   const dias = parseInt(document.getElementById('ff-dias').value);
   const category = document.getElementById('ff-category').value;
   if (!name) { showToast('⚠ Ingresa un nombre'); return; }
@@ -2086,9 +2441,11 @@ async function confirmDeleteFijo(id) {
    MODAL: CONCILIACIÓN DE SALDO
 ───────────────────────────────────────────────────────── */
 let _reconAccount = 'efectivo';
+let _reconCuentaId = '';
 
-function openReconciliationModal(account) {
+function openReconciliationModal(account, cuentaId) {
   _reconAccount = account || 'efectivo';
+  _reconCuentaId = (_reconAccount === 'transfer' && cuentaId) ? cuentaId : '';
   modalMode = 'recon';
   const today = new Date().toISOString().slice(0,10);
   openModal('Conciliar Saldo', `
@@ -2099,13 +2456,21 @@ function openReconciliationModal(account) {
         <div class="tab-switch-btn ${_reconAccount==='transfer'?'active':''}" id="rsw-bank" onclick="switchReconAccount('transfer')">💳 Digital</div>
       </div>
     </div>
+    <div class="form-group" id="recon-cuenta-group" style="display:${_reconAccount==='transfer' && cuentas.length ? 'block' : 'none'}">
+      <label class="form-label">Cuenta digital</label>
+      <select class="form-input" id="rf-cuenta" onchange="switchReconCuenta(this.value)">
+        <option value="">Total digital (todas)</option>
+        ${cuentas.map(c => `<option value="${c.id}" ${c.id===_reconCuentaId?'selected':''}>${c.name}</option>`).join('')}
+      </select>
+    </div>
     <div class="recon-prev-box">
       <span class="rp-label">Saldo anterior registrado</span>
       <span class="rp-val" id="rp-prev-val">$0</span>
     </div>
     <div class="form-group">
       <label class="form-label">Nuevo saldo real *</label>
-      <input class="form-input" type="number" id="rf-amount" placeholder="0" min="0" oninput="updateReconPreview()">
+      <input class="form-input" type="text" inputmode="numeric" data-money id="rf-amount"
+             placeholder="0" oninput="updateReconPreview()">
     </div>
     <div class="form-group">
       <label class="form-label">Fecha *</label>
@@ -2128,6 +2493,15 @@ function switchReconAccount(account) {
   _reconAccount = account;
   document.querySelectorAll('#rsw-cash, #rsw-bank').forEach(el => el.classList.remove('active'));
   document.getElementById(account === 'efectivo' ? 'rsw-cash' : 'rsw-bank').classList.add('active');
+  // El selector de cuenta digital solo tiene sentido en la pestaña Digital.
+  if (account !== 'transfer') _reconCuentaId = '';
+  const grp = document.getElementById('recon-cuenta-group');
+  if (grp) grp.style.display = (account === 'transfer' && cuentas.length) ? 'block' : 'none';
+  updateReconPreview();
+}
+
+function switchReconCuenta(cuentaId) {
+  _reconCuentaId = cuentaId || '';
   updateReconPreview();
 }
 
@@ -2137,34 +2511,41 @@ function updateReconPreview() {
   const previewVal = document.getElementById('rf-preview-val');
   if (!prevVal || !previewBox || !previewVal) return;
 
-  const previous = previousBalanceFor(_reconAccount);
+  const previous = previousBalanceFor(_reconAccount, _reconCuentaId);
   prevVal.textContent = fmt(previous);
 
   const amountEl = document.getElementById('rf-amount');
-  const amount = parseFloat(amountEl.value);
-  if (isNaN(amount)) {
+  const raw = amountEl.value.replace(/\D/g, '');
+  if (!raw) {
     previewBox.className = 'recon-diff-preview';
-    previewVal.textContent = '$0';
+    previewVal.textContent = fmt(0);
     return;
   }
+  const amount = parseMoney(amountEl.value);
   const diff = amount - previous;
   previewBox.className = 'recon-diff-preview ' + (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : ''));
   previewVal.textContent = (diff >= 0 ? '+' : '') + fmt(diff);
 }
 
 async function saveReconciliationForm() {
-  const amount = parseFloat(document.getElementById('rf-amount').value);
+  const amountRaw = document.getElementById('rf-amount').value.replace(/\D/g, '');
+  const amount = parseMoney(document.getElementById('rf-amount').value);
   const date = document.getElementById('rf-date').value;
   const notes = document.getElementById('rf-notes').value.trim();
-  if (isNaN(amount) || amount < 0) { showToast('⚠ Ingresa el nuevo saldo real'); return; }
+  if (!amountRaw) { showToast('⚠ Ingresa el nuevo saldo real'); return; }
   if (!date) { showToast('⚠ Ingresa la fecha'); return; }
 
-  const previousAmount = previousBalanceFor(_reconAccount);
+  // Solo se guarda cuentaId si la cuenta existe y estamos en modo Digital.
+  const cuentaId = (_reconAccount === 'transfer' && _reconCuentaId
+    && cuentas.some(c => c.id === _reconCuentaId)) ? _reconCuentaId : '';
+
+  const previousAmount = previousBalanceFor(_reconAccount, cuentaId);
   const diff = amount - previousAmount;
 
   const rec = {
     id: uid(),
     account: _reconAccount,
+    cuentaId,
     previousAmount,
     amount,
     diff,
@@ -2187,16 +2568,17 @@ async function saveReconciliationForm() {
    EXPORT / IMPORT
 ───────────────────────────────────────────────────────── */
 function exportJSON() {
-  const data = { version: 5, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio };
+  const data = { version: 6, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio, cuentas };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   download(blob, 'kasa-backup-' + new Date().toISOString().slice(0,10) + '.json');
   showToast('📦 JSON descargado');
 }
 
 function exportCSV() {
-  const headers = ['ID','Tipo','Monto','Fecha','Categoría','Cuenta','Notas'];
+  const headers = ['ID','Tipo','Monto','Fecha','Categoría','Cuenta','Cuenta Digital','Notas'];
   const rows = transactions.map(t => [
-    t.id, t.type, t.amount, t.date, t.category, t.account, t.notes || ''
+    t.id, t.type, t.amount, t.date, t.category, t.account,
+    t.cuentaId ? cuentaName(t.cuentaId) : '', t.notes || ''
   ]);
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -2225,10 +2607,12 @@ async function importJSON(file) {
     fijos = data.fijos || [];
     balances = data.balances || [];
     patrimonio = data.patrimonio || [];
+    cuentas = data.cuentas || [];
     await Promise.all(transactions.map(t => dbPut('transactions', t)));
     await Promise.all(fijos.map(f => dbPut('fijos', f)));
     await Promise.all(balances.map(b => dbPut('balances', b)));
     await Promise.all(patrimonio.map(p => dbPut('patrimonio', p)));
+    await Promise.all(cuentas.map(c => dbPut('cuentas', c)));
     showToast('📂 Datos importados exitosamente');
     renderPage(currentPage);
   } catch (e) {
@@ -2274,12 +2658,15 @@ function computeReport() {
   const gastoMensual = gastosTotales;
   const mesesCobertura = gastoMensual > 0 ? fondoEmergencia / gastoMensual : 0;
 
+  const digital = digitalBreakdown();   // desglose por cuenta digital
+
   return {
     periodo: MONTHS_ES[currentMonth] + ' ' + currentYear,
     ingresos, gastosVariables, gastosFijos, gastosTotales, flujoNeto, ahorroPeriodo,
     activosItems, pasivosItems,
     totalActivos: pt.activos, totalPasivos: pt.pasivos, patrimonioNeto: pt.neto, ahorros: pt.ahorros,
-    endeudamiento, capacidadAhorro, fondoEmergencia, mesesCobertura, gastoMensual, saldoDisponible
+    endeudamiento, capacidadAhorro, fondoEmergencia, mesesCobertura, gastoMensual, saldoDisponible,
+    digital
   };
 }
 
@@ -2440,6 +2827,14 @@ function generateReportHTML() {
     <tr class="total"><td>Patrimonio Neto (Activos − Pasivos)</td><td class="num" style="color:${m.patrimonioNeto>=0?'#2e9e63':'#c23a3a'}">${fmt(m.patrimonioNeto)}</td></tr>
   </table>
 
+  ${m.digital.items.length ? `
+  <h2>2.1 · Detalle de Cuentas Digitales</h2>
+  <table>
+    ${m.digital.items.map(c => `<tr><td>${c.name}${c.entidad ? `<span class="cat">${c.entidad}</span>` : ''}</td><td class="num">${fmt(c.balance)}</td></tr>`).join('')}
+    ${Math.round(m.digital.sinAsignar) !== 0 ? `<tr><td class="muted">Sin asignar</td><td class="num">${fmt(m.digital.sinAsignar)}</td></tr>` : ''}
+    <tr class="total"><td>Total Digital</td><td class="num">${fmt(m.digital.total)}</td></tr>
+  </table>` : ''}
+
   <h2>3 · Análisis Financiero</h2>
   <div class="metrics">
     ${metricCard('Nivel de Endeudamiento', m.endeudamiento.toFixed(1) + '%', 'Pasivos ÷ Activos · ideal &lt; 40%', endColor)}
@@ -2520,6 +2915,13 @@ function exportReportCSV() {
   m.pasivosItems.forEach(p => push(p.name + ' (' + p.cat + ')', p.amount));
   push('Total Pasivos', m.totalPasivos);
   push('Patrimonio Neto', m.patrimonioNeto);
+  if (m.digital.items.length) {
+    push('', '');
+    push('DETALLE CUENTAS DIGITALES', 'Saldo (COP)');
+    m.digital.items.forEach(c => push(c.name + (c.entidad ? ' (' + c.entidad + ')' : ''), c.balance));
+    if (Math.round(m.digital.sinAsignar) !== 0) push('Sin asignar', m.digital.sinAsignar);
+    push('Total Digital', m.digital.total);
+  }
   push('', '');
   push('ANÁLISIS FINANCIERO', 'Valor');
   push('Nivel de Endeudamiento (%)', m.endeudamiento.toFixed(1));
@@ -2608,6 +3010,9 @@ document.getElementById('add-btn-conciliacion').addEventListener('click', () => 
 document.getElementById('add-btn-patrimonio').addEventListener('click', () => {
   openPatrimonioForm(null, 'activo');
 });
+document.getElementById('add-btn-cuenta').addEventListener('click', () => {
+  openCuentaForm();
+});
 
 // Modal close
 document.getElementById('modal-close').addEventListener('click', closeModal);
@@ -2632,7 +3037,7 @@ document.getElementById('next-month').addEventListener('click', () => {
 });
 
 // Hamburgers
-['hamburger','hamburger2','hamburger3','hamburger4','hamburger5','hamburger6','hamburger7','hamburger8'].forEach(id => {
+['hamburger','hamburger2','hamburger3','hamburger4','hamburger5','hamburger6','hamburger7','hamburger8','hamburger9'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('click', openSidebar);
 });
