@@ -1426,6 +1426,11 @@ function fmtPlain(n) {
   return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(n || 0);
 }
 
+// "$ 24.194" — formato que se muestra DENTRO de los campos de monto.
+function fmtInput(n) {
+  return '$ ' + fmtPlain(n);
+}
+
 // Convierte cualquier texto con puntos/símbolos a número entero.
 function parseMoney(v) {
   if (typeof v === 'number') return v;
@@ -1448,7 +1453,7 @@ function initMoneyInputs(root) {
     el.addEventListener('input', () => {
       const digits = el.value.replace(/\D/g, '');
       // Reformatea solo si cambia, para no mover el cursor sin necesidad.
-      const next = digits ? fmtPlain(parseInt(digits, 10)) : '';
+      const next = digits ? fmtInput(parseInt(digits, 10)) : '';
       if (el.value !== next) {
         el.value = next;
         // Cursor siempre al final: es lo natural al teclear importes.
@@ -1790,7 +1795,7 @@ function openCuentaForm(existing) {
     ${existing ? '' : `
     <div class="form-group">
       <label class="form-label">Saldo inicial (opcional)</label>
-      <input class="form-input" type="text" inputmode="numeric" data-money id="cf-saldo" placeholder="0">
+      <input class="form-input" type="text" inputmode="numeric" data-money id="cf-saldo" placeholder="$ 0">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
         Se registra como una conciliación inicial para fijar el saldo de la cuenta.
       </div>
@@ -1943,7 +1948,7 @@ function openPatrimonioForm(existing, defaultKind) {
     <div class="form-group">
       <label class="form-label">Monto actual *</label>
       <input class="form-input" type="text" inputmode="numeric" data-money id="pf-amount"
-             placeholder="0" value="${p.amount ? fmtPlain(p.amount) : ''}">
+             placeholder="$ 0" value="${p.amount ? fmtInput(p.amount) : ''}">
     </div>
     <div class="form-group">
       <label class="form-label">Categoría *</label>
@@ -2256,7 +2261,7 @@ function openTxForm(type, existing) {
       <div class="form-group">
         <label class="form-label">Monto *</label>
         <input class="form-input" type="text" inputmode="numeric" data-money id="f-amount"
-               placeholder="0" value="${t.amount ? fmtPlain(t.amount) : ''}">
+               placeholder="$ 0" value="${t.amount ? fmtInput(t.amount) : ''}">
       </div>
       <div class="form-group">
         <label class="form-label">Fecha *</label>
@@ -2379,7 +2384,7 @@ function openFijoForm(existing) {
       <div class="form-group">
         <label class="form-label">Monto mensual *</label>
         <input class="form-input" type="text" inputmode="numeric" data-money id="ff-amount"
-               placeholder="0" value="${f.amount ? fmtPlain(f.amount) : ''}">
+               placeholder="$ 0" value="${f.amount ? fmtInput(f.amount) : ''}">
       </div>
       <div class="form-group">
         <label class="form-label">Días elegibles *</label>
@@ -2470,7 +2475,7 @@ function openReconciliationModal(account, cuentaId) {
     <div class="form-group">
       <label class="form-label">Nuevo saldo real *</label>
       <input class="form-input" type="text" inputmode="numeric" data-money id="rf-amount"
-             placeholder="0" oninput="updateReconPreview()">
+             placeholder="$ 0" oninput="updateReconPreview()">
     </div>
     <div class="form-group">
       <label class="form-label">Fecha *</label>
