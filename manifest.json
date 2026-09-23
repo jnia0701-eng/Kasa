@@ -1,17 +1,25 @@
 {
   "name": "Kasa · Finanzas Personales",
   "short_name": "Kasa",
+  "id": "/Kasa/",
   "description": "Controla tus ingresos, gastos, ahorros y genera tus Estados Financieros personales.",
   "lang": "es",
   "dir": "ltr",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "portrait-primary",
   "background_color": "#0f1117",
   "theme_color": "#0f1117",
-  "categories": ["finance", "productivity", "lifestyle"],
+  "categories": [
+    "finance",
+    "productivity",
+    "lifestyle"
+  ],
   "icons": [
     {
       "src": "./icon-192.png",
@@ -37,13 +45,23 @@
       "name": "Agregar movimiento",
       "short_name": "Agregar",
       "url": "./index.html?action=add",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Ver reportes",
       "short_name": "Reportes",
       "url": "./index.html?page=exportar",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

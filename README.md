@@ -12,6 +12,14 @@ desde GitHub Pages. Sin backend, sin cuentas: todos tus datos viven en **tu disp
   Los movimientos sin asignar se agrupan y quedan siempre visibles.
 - **Formato de moneda**: todos los campos de monto muestran separador de
   miles mientras escribes (`24194` → `24.194`) y se despliegan como `$ 24.194`.
+- **Gastos fijos con calendario**: día de pago y periodicidad (mensual a
+  bianual, para SOAT o tecnomecánica). Semáforo de estado — Al día,
+  Por pagar y Vencido — calculado sobre la fecha real de vencimiento.
+  Al registrar el pago se descuenta de la cuenta elegida; si lo pagaste
+  antes, se registra sin volver a descontar.
+- **Ahorro mensual requerido**: prorratea los fijos mensuales más la
+  fracción de los anuales, para saber cuánto apartar cada mes.
+- **Buscador** en Transacciones y **deshacer** al eliminar un movimiento.
 - **Patrimonio**: registro de activos y pasivos para tu Balance General.
 - **Reportes EEFF** descargables:
   - **Estado de Resultados** (Ingresos − Egresos = Flujo Neto).
@@ -91,9 +99,11 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 1. Sube el `index.html` (u otros archivos) nuevos al repo.
 2. **Sube la versión** en `sw.js` para forzar el refresco del caché:
    ```js
-   const CACHE_VERSION = 'kasa-v1.0.1'; // ← incrementa este número
+   const CACHE_VERSION = 'kasa-v1.7.1'; // ← incrementa este número
    ```
-3. Al abrir la app instalada, el Service Worker descargará la versión nueva.
+3. Al abrir la app instalada aparecerá el aviso **"Nueva versión
+   disponible · Actualizar"**. Un toque y se recarga sola: ya no hace
+   falta cerrarla desde el multitarea.
 
 ---
 
@@ -110,11 +120,15 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 ## 🧮 Cómo se calculan las métricas
 | Métrica | Fórmula | Ideal |
 |---|---|---|
-| Flujo Neto | Ingresos − (Gastos fijos + Gastos variables) | > 0 |
+| Flujo Neto | Ingresos − (Gastos fijos prorrateados + Variables) | > 0 |
 | Patrimonio Neto | Activos − Pasivos | creciente |
 | Nivel de Endeudamiento | Pasivos ÷ Activos × 100 | < 40 % |
 | Capacidad de Ahorro | Flujo Neto ÷ Ingresos × 100 | ≥ 20 % |
 | Fondo de Emergencia | (Ahorros + saldo disponible) ÷ Gasto mensual | 3 – 6 meses |
+
+> El semáforo del Dashboard compara los compromisos del mes contra tu
+> **Total Disponible** (no contra los ingresos del mes), para que un mes
+> sin ingresos registrados no marque alerta si tienes respaldo.
 
 > Los activos incluyen automáticamente tus **ahorros acumulados**. Registra el resto de
 > activos y tus pasivos en la sección **Patrimonio** para un Balance General completo.

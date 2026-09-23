@@ -3976,9 +3976,44 @@ document.getElementById('import-file').addEventListener('change', e => {
    SERVICE WORKER REGISTRATION
 ───────────────────────────────────────────────────────── */
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(() => {
-    console.log('✅ Service Worker registrado');
+  /* Aviso de nueva version. Antes habia que cerrar la PWA del
+     multitarea para recibir los cambios; ahora se ofrece actualizar
+     desde el propio toast y la pagina se recarga sola. */
+  const avisarActualizacion = worker => {
+    showToast('✨ Nueva version disponible', {
+      label: 'Actualizar',
+      onClick: () => worker.postMessage('SKIP_WAITING')
+    });
+  };
+
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // Ya habia una version esperando al abrir la app.
+    if (reg.waiting && navigator.serviceWorker.controller) avisarActualizacion(reg.waiting);
+
+    reg.addEventListener('updatefound', () => {
+      const nuevo = reg.installing;
+      if (!nuevo) return;
+      nuevo.addEventListener('statechange', () => {
+        // Solo se avisa si ya habia un SW activo: en la primera visita no.
+        if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+          avisarActualizacion(nuevo);
+        }
+      });
+    });
+
+    // Busca actualizaciones al volver a la app (PWA instalada).
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {});
+    });
   }).catch(err => console.log('SW no disponible:', err.message));
+
+  // Cuando el SW nuevo toma el control, se recarga una sola vez.
+  let _recargando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_recargando) return;
+    _recargando = true;
+    location.reload();
+  });
 }
 
 /* ─────────────────────────────────────────────────────────
