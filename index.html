@@ -357,7 +357,11 @@ a{text-decoration:none;color:inherit}
   #modal-overlay{align-items:center}
   #modal-box{border-radius:var(--r2) !important;max-width:480px;max-height:90vh}
 }
+body.modal-open{overflow:hidden}
+#modal-overlay{overscroll-behavior:contain}
 #modal-box{
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
   background:var(--card);
   border-radius:var(--r2) var(--r2) 0 0;
   width:100%;max-height:92dvh;
@@ -2012,8 +2016,20 @@ function openPagoFijoModal(id) {
       <input class="form-input" type="date" id="pg-fecha" value="${todayISO()}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
         Si lo pagaste antes, corrige la fecha: define el próximo vencimiento.
-        El descuento del saldo se registra siempre con fecha de hoy.
       </div>
+    </div>
+
+    <div class="form-group">
+      <label style="display:flex;align-items:flex-start;gap:.6rem;cursor:pointer">
+        <input type="checkbox" id="pg-descontar" checked
+               style="width:20px;height:20px;flex-shrink:0;margin-top:1px;accent-color:var(--text)">
+        <span>
+          <span style="font-weight:600;font-size:.88rem">Descontar del saldo ahora</span>
+          <span id="pg-descontar-nota" style="display:block;font-size:.75rem;color:var(--text2);margin-top:.15rem">
+            Genera el movimiento de ${fmt(f.amount)} con fecha de hoy.
+          </span>
+        </span>
+      </label>
     </div>
 
     <label class="form-label">Método de pago</label>
@@ -2030,11 +2046,27 @@ function openPagoFijoModal(id) {
     <div class="quick-types">${opcionesDigital}</div>
   `);
 
+  /* Si el pago es de una fecha pasada, ese dinero ya salio de la cuenta:
+     se desmarca el descuento para no restarlo dos veces. */
+  const fechaEl = document.getElementById('pg-fecha');
+  const chkEl = document.getElementById('pg-descontar');
+  const notaEl = document.getElementById('pg-descontar-nota');
+  const sincronizarDescuento = () => {
+    const esPasado = fechaEl.value && fechaEl.value < todayISO();
+    chkEl.checked = !esPasado;
+    notaEl.textContent = esPasado
+      ? 'Ese dinero ya salió de tu cuenta, por eso no se descuenta de nuevo. Solo se registra para el vencimiento.'
+      : `Genera el movimiento de ${fmt(f.amount)} con fecha de hoy.`;
+  };
+  fechaEl.addEventListener('change', sincronizarDescuento);
+  fechaEl.addEventListener('input', sincronizarDescuento);
+  sincronizarDescuento();
+
   document.querySelectorAll('#modal-content [data-metodo]').forEach(btn => {
-    btn.onclick = () => {
-      const fechaEl = document.getElementById('pg-fecha');
-      registrarPagoFijo(id, btn.dataset.metodo, btn.dataset.cuenta || '', fechaEl ? fechaEl.value : '');
-    };
+    btn.onclick = () => registrarPagoFijo(
+      id, btn.dataset.metodo, btn.dataset.cuenta || '',
+      fechaEl ? fechaEl.value : '', chkEl ? chkEl.checked : true
+    );
   });
 }
 
@@ -2062,8 +2094,10 @@ function openEditarPagoModal(id) {
       <label class="form-label">Fecha en que lo pagaste *</label>
       <input class="form-input" type="date" id="ep-fecha" value="${esc(pago.fecha)}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
-        Solo recalcula el vencimiento. El movimiento sigue registrado el
-        ${pago.registradoEl ? fechaCorta(pago.registradoEl) : fechaCorta(pago.fecha)} y el acumulado no cambia.
+        ${pago.txId
+          ? 'Solo recalcula el vencimiento. El movimiento sigue registrado el ' +
+            fechaCorta(pago.registradoEl || pago.fecha) + ' y el acumulado no cambia.'
+          : 'Este pago se registró sin descontar del saldo, así que el acumulado no se ve afectado.'}
       </div>
     </div>
     <div class="form-group">
@@ -2135,7 +2169,7 @@ async function guardarEdicionPago(id) {
 }
 
 let _pagoEnCurso = false;
-async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida) {
+async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) {
   if (_pagoEnCurso) return;               // evita duplicar el gasto con doble toque
   const f = fijos.find(x => x.id === id);
   if (!f) return;
@@ -2147,26 +2181,35 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida) {
   const fechaMovimiento = todayISO();
   const vence = todayISO(proximoVencimiento(f));
 
+  // Un pago de fecha pasada no genera movimiento: ese dinero ya salio de
+  // la cuenta y descontarlo ahora lo restaria dos veces.
+  const generaMovimiento = descontar !== false;
+
   try {
-    // Transacción real: descuenta el saldo de efectivo o de la cuenta digital.
-    const tx = {
-      id: uid(), type: 'expense', amount: f.amount, date: fechaMovimiento,
-      category: f.category, account: metodo === 'digital' ? 'transfer' : 'efectivo',
-      cuentaId: metodo === 'digital' ? cuentaId : '',
-      notes: 'Pago gasto fijo: ' + f.name + (fecha !== fechaMovimiento ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
-    };
-    await saveTransaction(tx);
+    let txId = '';
+    if (generaMovimiento) {
+      const tx = {
+        id: uid(), type: 'expense', amount: f.amount, date: fechaMovimiento,
+        category: f.category, account: metodo === 'digital' ? 'transfer' : 'efectivo',
+        cuentaId: metodo === 'digital' ? cuentaId : '',
+        notes: 'Pago gasto fijo: ' + f.name + (fecha !== fechaMovimiento ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
+      };
+      await saveTransaction(tx);
+      txId = tx.id;
+    }
 
     const actualizado = Object.assign({}, f, {
       pagos: (f.pagos || []).concat([{
         fecha, vencia: vence, metodo, cuentaId: cuentaId || '',
-        txId: tx.id, registradoEl: fechaMovimiento
+        txId, registradoEl: fechaMovimiento, sinMovimiento: !generaMovimiento
       }])
     });
     await saveFijo(actualizado);
 
     closeModal();
-    showToast(`✅ Pagado · ${metodo === 'digital' ? cuentaName(cuentaId) : 'Efectivo'} −${fmt(f.amount)}`);
+    showToast(generaMovimiento
+      ? `✅ Pagado · ${metodo === 'digital' ? cuentaName(cuentaId) : 'Efectivo'} −${fmt(f.amount)}`
+      : `✅ Registrado · sin descontar del saldo`);
     renderPage(currentPage);
   } catch (e) {
     console.error('Error registrando pago:', e);
@@ -2266,19 +2309,114 @@ function renderCuentas() {
   // Bolsa de movimientos digitales sin cuenta asignada.
   const un = document.getElementById('cuentas-unassigned');
   if (Math.round(bd.sinAsignar) !== 0) {
+    const nSin = transactions.filter(t => t.account === 'transfer' && !t.cuentaId).length;
     un.innerHTML = `
-      <div class="ant-alert">
+      <div class="ant-alert" id="btn-asignar" style="cursor:pointer">
         <div class="ant-icon">📥</div>
-        <div>
+        <div style="flex:1">
           <div style="font-weight:600;font-size:.85rem">Sin asignar: ${fmt(bd.sinAsignar)}</div>
           <div style="font-size:.78rem;color:var(--text2)">
-            Hay movimientos digitales que no pertenecen a ninguna cuenta. Edítalos desde
-            Transacciones y elige su cuenta para completar el desglose.
+            ${nSin} movimiento(s) digital(es) no pertenecen a ninguna cuenta.
+            <strong>Toca aquí para asignarlos</strong> y completar el desglose.
           </div>
         </div>
+        <div style="font-size:1.2rem;color:var(--text2)">›</div>
       </div>`;
+    document.getElementById('btn-asignar').onclick = openAsignarCuentaModal;
   } else {
     un.innerHTML = '';
+  }
+}
+
+/* Reparte entre cuentas los movimientos digitales que quedaron sueltos
+   (por ejemplo los registrados antes de crear las cuentas). */
+function openAsignarCuentaModal() {
+  if (!cuentas.length) { showToast('⚠ Crea primero una cuenta digital'); return; }
+  const sueltos = transactions
+    .filter(t => t.account === 'transfer' && !t.cuentaId)
+    .sort((a, b) => parseLocalDate(b.date) - parseLocalDate(a.date));
+  if (!sueltos.length) { showToast('✓ No hay movimientos sin asignar'); return; }
+
+  const opciones = cuentas.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const signo = t => t.type === 'income' ? '+' : '−';
+  const color = t => t.type === 'income' ? 'var(--ok)' : (t.type === 'saving' ? '#8a5cf6' : 'var(--danger)');
+
+  openModal('Asignar movimientos', `
+    <p class="muted" style="margin-bottom:1rem">
+      Estos movimientos digitales no pertenecen a ninguna cuenta. Elige a cuál va cada uno.
+    </p>
+    <div class="form-group">
+      <label class="form-label">Asignar todos a</label>
+      <select class="form-input" id="asig-todos">
+        <option value="">— Elegir cuenta —</option>${opciones}
+      </select>
+    </div>
+    <div id="asig-lista">
+      ${sueltos.map(t => `
+        <div class="fijo-item" style="align-items:flex-start" data-row="${t.id}">
+          <div class="fijo-info">
+            <div class="f-name" style="font-size:.88rem">${esc(t.category)}</div>
+            <div class="f-sub">${fechaCorta(t.date)}${t.notes ? ' · ' + esc(t.notes) : ''}</div>
+            <select class="form-input" data-asig="${t.id}" style="margin-top:.5rem;padding:.45rem .6rem;font-size:.85rem">
+              <option value="">— Sin asignar —</option>${opciones}
+            </select>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div class="fijo-amount" style="color:${color(t)}">${signo(t)}${fmt(t.amount)}</div>
+            <button class="tx-btn del" data-borrar="${t.id}" title="Eliminar movimiento"
+                    style="margin-top:.5rem">🗑</button>
+          </div>
+        </div>`).join('')}
+    </div>
+    <button class="btn-primary" onclick="guardarAsignaciones()">Guardar asignaciones</button>
+  `);
+
+  document.getElementById('asig-todos').onchange = e => {
+    const v = e.target.value;
+    if (!v) return;
+    document.querySelectorAll('#asig-lista [data-asig]').forEach(sel => { sel.value = v; });
+  };
+  document.querySelectorAll('#asig-lista [data-borrar]').forEach(btn => {
+    btn.onclick = () => confirmBorrarMovimientoSuelto(btn.dataset.borrar);
+  });
+}
+
+async function guardarAsignaciones() {
+  const selects = [...document.querySelectorAll('#asig-lista [data-asig]')];
+  const cambios = selects.filter(sel => sel.value);
+  if (!cambios.length) { showToast('⚠ Elige al menos una cuenta'); return; }
+  try {
+    for (const sel of cambios) {
+      const tx = transactions.find(t => t.id === sel.dataset.asig);
+      if (tx && cuentas.some(c => c.id === sel.value)) {
+        await saveTransaction(Object.assign({}, tx, { cuentaId: sel.value }));
+      }
+    }
+    closeModal();
+    showToast(`✅ ${cambios.length} movimiento(s) asignado(s)`);
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error asignando movimientos:', e);
+    showToast('❌ No se pudo asignar. Intenta de nuevo.');
+  }
+}
+
+async function confirmBorrarMovimientoSuelto(txId) {
+  const tx = transactions.find(t => t.id === txId);
+  if (!tx) return;
+  if (!(await appConfirm(`¿Eliminar el movimiento de ${fmt(tx.amount)} (${esc(tx.category)})? Esta acción no se puede deshacer.`))) {
+    openAsignarCuentaModal();   // vuelve a la lista si se cancela
+    return;
+  }
+  try {
+    await deleteTransaction(txId);
+    showToast('🗑 Movimiento eliminado');
+    renderPage(currentPage);
+    const quedan = transactions.filter(t => t.account === 'transfer' && !t.cuentaId).length;
+    if (quedan) openAsignarCuentaModal();
+  } catch (e) {
+    console.error('Error eliminando movimiento:', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
   }
 }
 
@@ -2675,16 +2813,48 @@ let editingId = null;
 let editingFijoId = null;
 let modalMode = null;  // 'tx-income' | 'tx-expense' | 'fijo' | 'quick'
 
+/* Bloqueo de scroll del fondo mientras hay un modal abierto.
+   En movil, arrastrar sobre el modal desplazaba la pagina de atras.
+   Se fija el body conservando la posicion para restaurarla al cerrar. */
+let _scrollLocked = false;
+let _scrollLockY = 0;
+
+function lockScroll() {
+  if (_scrollLocked) return;              // los modales anidados no re-bloquean
+  _scrollLockY = window.scrollY || window.pageYOffset || 0;
+  document.body.style.position = 'fixed';
+  document.body.style.top = '-' + _scrollLockY + 'px';
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.width = '100%';
+  document.body.classList.add('modal-open');
+  _scrollLocked = true;
+}
+
+function unlockScroll() {
+  if (!_scrollLocked) return;
+  document.body.classList.remove('modal-open');
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
+  _scrollLocked = false;
+  window.scrollTo(0, _scrollLockY);
+}
+
 function openModal(titleText, content) {
   document.getElementById('modal-title-text').textContent = titleText;
   const box = document.getElementById('modal-content');
   box.innerHTML = content;
   document.getElementById('modal-overlay').classList.add('open');
+  lockScroll();
   initMoneyInputs(box);   // activa la máscara de miles en los campos de dinero
 }
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
+  unlockScroll();
   editingId = null; editingFijoId = null; modalMode = null;
 }
 
