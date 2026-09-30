@@ -669,6 +669,9 @@ body.modal-open{overflow:hidden}
       </div>
     </div>
 
+    <!-- Trasladar plata entre bolsillos (no es ingreso ni gasto) -->
+    <button class="btn-primary" id="dash-traslado" style="margin-bottom:1rem;background:var(--card);color:var(--text);border:1px solid var(--border2)">⇄ Trasladar entre Efectivo y Cuentas</button>
+
     <!-- Desglose de cuentas digitales -->
     <div class="card card-sm" id="dash-cuentas-card" style="display:none;margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
@@ -876,9 +879,12 @@ body.modal-open{overflow:hidden}
         <button class="icon-btn hamburger" id="hamburger7">☰</button>
         <h1>Conciliación</h1>
       </div>
-      <button class="icon-btn" id="add-btn-conciliacion">＋</button>
+      <div style="display:flex;gap:.5rem">
+        <button class="icon-btn" id="add-btn-traslado" title="Trasladar entre Efectivo y cuentas">⇄</button>
+        <button class="icon-btn" id="add-btn-conciliacion">＋</button>
+      </div>
     </div>
-    <p class="muted" style="margin-bottom:1rem">Compara tu saldo real (efectivo o digital) contra lo registrado y guarda la diferencia como tu ganancia o total hecho en el periodo.</p>
+    <p class="muted" style="margin-bottom:1rem">Compara tu saldo real (efectivo o digital) contra lo registrado: la diferencia se <strong>suma al total</strong> de esa tarjeta y queda guardada como tu ganancia o total hecho en el periodo. Con ⇄ mueves plata entre bolsillos sin afectar el total.</p>
 
     <div class="recon-summary">
       <div class="recon-card">
@@ -900,6 +906,10 @@ body.modal-open{overflow:hidden}
         <div class="r-val" id="recon-count">0</div>
       </div>
     </div>
+
+    <div class="section-title" style="margin-bottom:.75rem">Traslados internos (Efectivo ⇄ Cuentas)</div>
+    <p class="muted" style="margin-bottom:.75rem">Mueven plata de un bolsillo a otro sin ser ingreso ni gasto. El total no cambia.</p>
+    <div id="traslado-list" style="margin-bottom:1.25rem"></div>
 
     <div class="section-title" style="margin-bottom:.75rem">Historial de conciliaciones</div>
     <div id="recon-list"></div>
@@ -1071,7 +1081,7 @@ body.modal-open{overflow:hidden}
    STORAGE — IndexedDB with LocalStorage fallback
 ───────────────────────────────────────────────────────── */
 const DB_NAME = 'kasa_db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 let db = null;
 
 async function initDB() {
@@ -1094,6 +1104,8 @@ async function initDB() {
             d.createObjectStore('patrimonio', { keyPath: 'id' });
           if (!d.objectStoreNames.contains('cuentas'))
             d.createObjectStore('cuentas', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('traslados'))
+            d.createObjectStore('traslados', { keyPath: 'id' });
         };
       } catch (innerErr) { reject(innerErr); }
     });
@@ -1107,7 +1119,7 @@ async function initDB() {
 /* Respaldo en memoria: si IndexedDB Y localStorage fallan (por ejemplo dentro
    de una vista previa en sandbox o un WebView restringido), la app sigue
    funcionando durante la sesión en lugar de que los botones "no hagan nada". */
-const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [], cuentas: [] };
+const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [], cuentas: [], traslados: [] };
 
 function safeLSGet(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -1201,6 +1213,7 @@ let fijos = [];
 let balances = [];
 let patrimonio = [];
 let cuentas = [];   // Cuentas digitales (desglose del saldo "transfer")
+let traslados = []; // Traspasos internos entre Efectivo y cuentas digitales (no son ingreso ni gasto)
 
 const INCOME_CATS = ['Salario', 'Freelance', 'Ventas', 'Inversiones', 'Regalos', 'Otros ingresos'];
 const EXPENSE_CATS = ['Comida', 'Transporte', 'Salud', 'Entretenimiento', 'Ropa', 'Café/Snacks', 'Tecnología', 'Educación', 'Belleza', 'Hogar', 'Otros gastos'];
@@ -1361,16 +1374,132 @@ function fechaCorta(iso) {
    Balance por cuenta = Ingresos - Gastos - Ahorros, filtrado
    por el campo "account" de cada transacción.
 ───────────────────────────────────────────────────────── */
-function accountTotals() {
-  let cash = 0, digital = 0;
+/* TRASLADOS INTERNOS: mover plata entre bolsillos sin que sea
+   ingreso ni gasto. Ej: cuenta X saca 30000 a efectivo →
+   efectivo +30000 y cuenta X −30000. El total no cambia.
+   Endpoints: 'efectivo' · 'transfer' (digital general / sin
+   asignar) · 'cuenta:<id>' (cuenta digital concreta). */
+function trasladoEndpoints() {
+  const eps = [{ id: 'efectivo', label: 'Efectivo' }];
+  cuentas.forEach(c => eps.push({ id: 'cuenta:' + c.id, label: c.name }));
+  eps.push({ id: 'transfer', label: 'Digital general (sin asignar)' });
+  return eps;
+}
+
+function endpointLabel(ep) {
+  if (ep === 'efectivo') return 'Efectivo';
+  if (ep === 'transfer') return 'Digital general';
+  if (ep && ep.indexOf('cuenta:') === 0) return cuentaName(ep.slice(7));
+  return ep || '—';
+}
+
+// Neto de traslados de un endpoint: entradas − salidas.
+function trasladoNet(ep) {
+  let s = 0;
+  for (let i = 0; i < traslados.length; i++) {
+    const m = Number(traslados[i].amount) || 0;
+    if (traslados[i].to === ep) s += m;
+    if (traslados[i].from === ep) s -= m;
+  }
+  return s;
+}
+
+function endpointBookBalance(ep) {
+  if (ep === 'efectivo') return cashDerived() + cashAdjust() + trasladoNet('efectivo');
+  if (ep && ep.indexOf('cuenta:') === 0) {
+    const id = ep.slice(7);
+    return cuentaDerivedBalance(id) + cuentaReconDiff(id) + trasladoNet(ep);
+  }
+  if (ep === 'transfer') {
+    const der = digitalDerivedTotal();
+    let asig = 0;
+    for (let i = 0; i < transactions.length; i++) {
+      const t = transactions[i];
+      if (t.account !== 'transfer' || !t.cuentaId) continue;
+      if (t.type !== 'income' && t.type !== 'expense' && t.type !== 'saving') continue;
+      const monto = Number(t.amount) || 0;
+      asig += t.type === 'income' ? monto : -monto;
+    }
+    return (der - asig) + transferAggregateAdjust() + trasladoNet('transfer');
+  }
+  return 0;
+}
+
+async function saveTraslado(item) {
+  await dbPut('traslados', item);
+  const idx = traslados.findIndex(x => x.id === item.id);
+  if (idx >= 0) traslados[idx] = item; else traslados.push(item);
+}
+
+async function deleteTraslado(id) {
+  await dbDelete('traslados', id);
+  traslados = traslados.filter(x => x.id !== id);
+}
+
+// Solo movimientos de efectivo (base, sin ajustes ni traslados).
+function cashDerived() {
+  let cash = 0;
   for (let i = 0; i < transactions.length; i++) {
     const t = transactions[i];
+    if (t.account !== 'efectivo') continue;
     if (t.type !== 'income' && t.type !== 'expense' && t.type !== 'saving') continue;
     const monto = Number(t.amount) || 0;
-    const delta = t.type === 'income' ? monto : -monto;   // gasto y ahorro restan
-    if (t.account === 'efectivo') cash += delta;
-    else if (t.account === 'transfer') digital += delta;
+    cash += t.type === 'income' ? monto : -monto;
   }
+  return cash;
+}
+
+function digitalDerivedTotal() {
+  let digital = 0;
+  for (let i = 0; i < transactions.length; i++) {
+    const t = transactions[i];
+    if (t.account !== 'transfer') continue;
+    if (t.type !== 'income' && t.type !== 'expense' && t.type !== 'saving') continue;
+    const monto = Number(t.amount) || 0;
+    digital += t.type === 'income' ? monto : -monto;
+  }
+  return digital;
+}
+
+// Suma de diferencias conciliadas de cada bolsillo.
+function cashAdjust() {
+  return balances
+    .filter(b => b.account === 'efectivo')
+    .reduce((s, b) => s + (Number(b.diff) || 0), 0);
+}
+
+function transferAdjustTotal() {
+  return balances
+    .filter(b => b.account === 'transfer')
+    .reduce((s, b) => s + (Number(b.diff) || 0), 0);
+}
+
+// Ajustes del "Total digital" (los que no van a una cuenta concreta).
+function transferAggregateAdjust() {
+  return balances
+    .filter(b => b.account === 'transfer' && !b.cuentaId)
+    .reduce((s, b) => s + (Number(b.diff) || 0), 0);
+}
+
+// Todos los traslados que tocan lo digital (cuentas + bolsa general).
+function transferTrasladoTotal() {
+  let s = 0;
+  for (let i = 0; i < traslados.length; i++) {
+    const tr = traslados[i];
+    const m = Number(tr.amount) || 0;
+    const tocaDigital = ep => ep === 'transfer' || (ep && ep.indexOf('cuenta:') === 0);
+    if (tocaDigital(tr.to)) s += m;
+    if (tocaDigital(tr.from)) s -= m;
+  }
+  return s;
+}
+
+function accountTotals() {
+  // Saldo en libros = movimientos ± conciliaciones ± traslados.
+  // Antes solo se sumaban los movimientos, por eso conciliar
+  // se veía en el historial pero NUNCA subía al total.
+  const cash = cashDerived() + cashAdjust() + trasladoNet('efectivo');
+  const digital = digitalDerivedTotal() + transferAdjustTotal() + transferTrasladoTotal();
   return { cash, digital };
 }
 
@@ -1396,11 +1525,13 @@ function lastReconciliation(account, cuentaId) {
 // Saldo anterior de referencia: usa la última conciliación guardada;
 // si nunca se ha conciliado, usa el saldo calculado desde las transacciones.
 function previousBalanceFor(account, cuentaId) {
-  const last = lastReconciliation(account, cuentaId);
-  if (last) return last.amount;
-  if (cuentaId) return cuentaDerivedBalance(cuentaId);
-  const acc = accountTotals();
-  return account === 'efectivo' ? acc.cash : acc.digital;
+  // Saldo en libros ANTES de conciliar: movimientos + ajustes
+  // acumulados + traslados. Antes se usaba el monto de la ultima
+  // conciliacion e ignoraba los movimientos y traslados hechos
+  // despues, asi que la diferencia salia mal.
+  if (account === 'efectivo') return accountTotals().cash;
+  if (cuentaId) return cuentaBalance(cuentaId);
+  return accountTotals().digital;
 }
 
 function sumReconciliationDiffs(account) {
@@ -1425,6 +1556,7 @@ async function loadData() {
   balances = await dbGet('balances');
   patrimonio = await dbGet('patrimonio');
   cuentas = await dbGet('cuentas');
+  traslados = await dbGet('traslados');
 }
 
 async function saveTransaction(tx) {
@@ -1488,10 +1620,10 @@ function cuentaReconDiff(id) {
     .reduce((s, b) => s + b.diff, 0);
 }
 
-// Saldo mostrado: movimientos asignados + ajustes conciliados de la cuenta.
+// Saldo mostrado: movimientos + ajustes conciliados + traslados.
 // Tras conciliar, este saldo equivale al saldo real declarado.
 function cuentaBalance(id) {
-  return cuentaDerivedBalance(id) + cuentaReconDiff(id);
+  return cuentaDerivedBalance(id) + cuentaReconDiff(id) + trasladoNet('cuenta:' + id);
 }
 
 /* Desglose completo del dinero digital, en una sola pasada. */
@@ -1521,13 +1653,17 @@ function digitalBreakdown() {
   const items = cuentas.map(c => {
     const der = derivado.get(c.id) || 0;
     asignadoDerived += der;
-    const balance = der + (ajustes.get(c.id) || 0);
+    const balance = der + (ajustes.get(c.id) || 0) + trasladoNet('cuenta:' + c.id);
     totalCuentas += balance;
     return { id: c.id, name: c.name, entidad: c.entidad || '', balance };
   }).sort((a, b) => b.balance - a.balance);
 
-  const sinAsignar = digitalDerived - asignadoDerived;   // movimientos sin cuenta
-  return { items, sinAsignar, totalCuentas, total: totalCuentas + sinAsignar };
+  // Bolsa sin asignar: movimientos sueltos + ajustes del "Total digital"
+  // (conciliaciones agregadas) + traslados hacia/desde lo general.
+  // Antes los ajustes agregados se ignoraban aqui y el total no cuadraba.
+  const sinAsignarDerived = digitalDerived - asignadoDerived;
+  const sinAsignar = sinAsignarDerived + transferAggregateAdjust() + trasladoNet('transfer');
+  return { items, sinAsignar, sinAsignarDerived, totalCuentas, total: totalCuentas + sinAsignar };
 }
 
 /* <option> de cuentas digitales para los formularios. */
@@ -1726,17 +1862,17 @@ function renderDashboard() {
   const expense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const savingMonth = monthTx.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
 
-  // Totales generales (todo el histórico): Total Disponible = Ingresos - Gastos - Ahorros
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
-  const totalSaving = transactions.filter(t => t.type === 'saving').reduce((s,t) => s+t.amount, 0);
-  const totalDisponible = totalIncome - totalExpense - totalSaving;
-
-  // Ajuste por conciliación: diferencia acumulada entre saldo real y saldo calculado
+  // Totales generales: saldo en libros por bolsillo. Cada tarjeta ya
+  // incluye movimientos + conciliaciones + traslados, asi que el
+  // Total Disponible es la suma de ambos (los traslados se anulan
+  // entre si y no inflan ni ingresos ni gastos).
+  const accTotals = accountTotals();
   const totalAdjust = sumReconciliationDiffs();
-  const adjustedTotal = totalDisponible + totalAdjust;
+  const adjustedTotal = accTotals.cash + accTotals.digital;
 
   document.getElementById('hero-balance').textContent = fmt(adjustedTotal);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const totalSaving = transactions.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
   document.getElementById('hero-cash').textContent = fmt(totalExpense);
   document.getElementById('hero-bank').textContent = fmt(totalSaving);
   const heroAdjustEl = document.getElementById('hero-adjust');
@@ -1748,8 +1884,7 @@ function renderDashboard() {
   document.getElementById('stat-expense').textContent = fmt(expense);
   document.getElementById('stat-saving').textContent = fmt(savingMonth);
 
-  // Efectivo vs Digital (saldo histórico por tipo de cuenta)
-  const accTotals = accountTotals();
+  // Efectivo vs Digital: saldo en libros (ya incluye conciliaciones y traslados)
   document.getElementById('stat-cash-total').textContent = fmt(accTotals.cash);
   document.getElementById('stat-digital-total').textContent = fmt(accTotals.digital);
 
@@ -1857,7 +1992,7 @@ function renderAccountDiffBadge(elId, account) {
   if (!last) { el.textContent = 'Sin conciliar aún · toca para conciliar'; el.className = 's-diff zero'; return; }
   const sign = last.diff > 0 ? '+' : (last.diff < 0 ? '' : '±');
   el.className = 's-diff ' + (last.diff > 0 ? 'pos' : (last.diff < 0 ? 'neg' : 'zero'));
-  el.textContent = `Última conciliación: ${sign}${fmt(last.diff)}`;
+  el.textContent = `Conciliado ✓ · dif. ${sign}${fmt(last.diff)} (ya incluida en el total)`;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -2378,6 +2513,7 @@ function renderCuentas() {
         <div class="fijo-amount" style="color:${c.balance >= 0 ? 'var(--blue)' : 'var(--danger)'}">${fmt(c.balance)}</div>
         <div class="tx-actions" style="margin-left:.5rem">
           <button class="tx-btn recon" data-id="${c.id}" title="Conciliar saldo">⚖️</button>
+          <button class="tx-btn move" data-id="${c.id}" title="Trasladar a/desde esta cuenta">⇄</button>
           <button class="tx-btn edit" data-id="${c.id}" title="Editar">✏️</button>
           <button class="tx-btn del" data-id="${c.id}" title="Eliminar">🗑</button>
         </div>
@@ -2387,6 +2523,9 @@ function renderCuentas() {
     list.querySelectorAll('.tx-btn.recon').forEach(b => {
       b.onclick = () => openReconciliationModal('transfer', b.dataset.id);
     });
+    list.querySelectorAll('.tx-btn.move').forEach(b => {
+      b.onclick = () => openTrasladoModal('cuenta:' + b.dataset.id, 'efectivo');
+    });
     list.querySelectorAll('.tx-btn.edit').forEach(b => {
       b.onclick = () => openCuentaForm(cuentas.find(x => x.id === b.dataset.id));
     });
@@ -2395,10 +2534,10 @@ function renderCuentas() {
     });
   }
 
-  // Bolsa de movimientos digitales sin cuenta asignada.
+  // Bolsa digital general: movimientos sueltos + ajustes del "Total digital" + traslados.
   const un = document.getElementById('cuentas-unassigned');
-  if (Math.round(bd.sinAsignar) !== 0) {
-    const nSin = transactions.filter(t => t.account === 'transfer' && !t.cuentaId).length;
+  const nSin = transactions.filter(t => t.account === 'transfer' && !t.cuentaId).length;
+  if (nSin > 0) {
     un.innerHTML = `
       <div class="ant-alert" id="btn-asignar" style="cursor:pointer">
         <div class="ant-icon">📥</div>
@@ -2412,6 +2551,17 @@ function renderCuentas() {
         <div style="font-size:1.2rem;color:var(--text2)">›</div>
       </div>`;
     document.getElementById('btn-asignar').onclick = openAsignarCuentaModal;
+  } else if (Math.round(bd.sinAsignar) !== 0) {
+    un.innerHTML = `
+      <div class="ant-alert">
+        <div class="ant-icon">💳</div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:.85rem">Digital general: ${fmt(bd.sinAsignar)}</div>
+          <div style="font-size:.78rem;color:var(--text2)">
+            Viene de conciliaciones del Total digital o de traslados (movimientos: ${fmt(bd.sinAsignarDerived)}).
+          </div>
+        </div>
+      </div>`;
   } else {
     un.innerHTML = '';
   }
@@ -2587,6 +2737,15 @@ async function confirmDeleteCuenta(id) {
     for (const t of huerfanas) { t.cuentaId = ''; await dbPut('transactions', t); }
     const recons = balances.filter(b => b.cuentaId === id);
     for (const b of recons) await deleteBalanceRecord(b.id);
+    // Los traslados de la cuenta pasan a la bolsa digital general para
+    // que la plata no "desaparezca" del total.
+    const moves = traslados.filter(tr => tr.from === 'cuenta:' + id || tr.to === 'cuenta:' + id);
+    for (const tr of moves) {
+      await saveTraslado(Object.assign({}, tr, {
+        from: tr.from === 'cuenta:' + id ? 'transfer' : tr.from,
+        to: tr.to === 'cuenta:' + id ? 'transfer' : tr.to
+      }));
+    }
 
     await deleteCuenta(id);
     showToast('🗑 Cuenta eliminada');
@@ -2792,6 +2951,48 @@ function renderConciliacion() {
   list.querySelectorAll('.tx-btn.del').forEach(btn => {
     btn.onclick = () => confirmDeleteReconciliation(btn.dataset.id);
   });
+  renderTrasladosList();
+}
+
+function renderTrasladosList() {
+  const list = document.getElementById('traslado-list');
+  if (!list) return;
+  if (!traslados.length) {
+    list.innerHTML = '<div class="empty" style="padding:1.5rem 1rem"><div class="e-icon">⇄</div>Sin traslados aún. Ej: saca $30.000 de tu Nequi a efectivo.</div>';
+    return;
+  }
+  const sorted = [...traslados].sort((a, b) => parseLocalDate(b.date) - parseLocalDate(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+  list.innerHTML = sorted.map(tr => {
+    const d = parseLocalDate(tr.date);
+    const dateStr = d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+    return `
+    <div class="recon-item">
+      <div class="ri-icon" style="background:rgba(200,245,96,.2);color:#5a7a10">⇄</div>
+      <div class="ri-info">
+        <div class="ri-main">${esc(endpointLabel(tr.from))} → ${esc(endpointLabel(tr.to))} · ${dateStr}</div>
+        <div class="ri-sub">${tr.notes ? esc(tr.notes) : 'Traspaso interno (no suma ni resta al total)'}</div>
+      </div>
+      <div class="ri-diff">${fmt(tr.amount)}</div>
+      <div class="tx-actions" style="margin-left:.25rem">
+        <button class="tx-btn del" data-id="${tr.id}">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.tx-btn.del').forEach(btn => {
+    btn.onclick = () => confirmDeleteTraslado(btn.dataset.id);
+  });
+}
+
+async function confirmDeleteTraslado(id) {
+  if (!(await appConfirm('¿Eliminar este traslado? Los saldos volverán a calcularse sin ese movimiento.'))) return;
+  try {
+    await deleteTraslado(id);
+    showToast('🗑 Traslado eliminado');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error eliminando traslado:', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
 }
 
 async function confirmDeleteReconciliation(id) {
@@ -3274,9 +3475,12 @@ function openReconciliationModal(account, cuentaId) {
         ${cuentas.map(c => `<option value="${c.id}" ${c.id===_reconCuentaId?'selected':''}>${esc(c.name)}</option>`).join('')}
       </select>
     </div>
-    <div class="recon-prev-box">
-      <span class="rp-label">Saldo anterior registrado</span>
-      <span class="rp-val" id="rp-prev-val">$0</span>
+    <div class="recon-prev-box" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="rp-label">Saldo en libros (actual)</span>
+        <span class="rp-val" id="rp-prev-val">$0</span>
+      </div>
+      <div class="muted" id="rp-detail" style="font-size:.75rem;margin-top:.35rem"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Nuevo saldo real *</label>
@@ -3316,14 +3520,30 @@ function switchReconCuenta(cuentaId) {
   updateReconPreview();
 }
 
+function reconBookParts() {
+  // Desglose del saldo en libros del ambito que se esta conciliando.
+  if (_reconAccount === 'efectivo') {
+    return { derived: cashDerived(), adjust: cashAdjust(), tr: trasladoNet('efectivo') };
+  }
+  if (_reconCuentaId) {
+    return { derived: cuentaDerivedBalance(_reconCuentaId), adjust: cuentaReconDiff(_reconCuentaId), tr: trasladoNet('cuenta:' + _reconCuentaId) };
+  }
+  return { derived: digitalDerivedTotal(), adjust: transferAdjustTotal(), tr: transferTrasladoTotal() };
+}
+
 function updateReconPreview() {
   const prevVal = document.getElementById('rp-prev-val');
+  const detail = document.getElementById('rp-detail');
   const previewBox = document.getElementById('rf-preview');
   const previewVal = document.getElementById('rf-preview-val');
   if (!prevVal || !previewBox || !previewVal) return;
 
   const previous = previousBalanceFor(_reconAccount, _reconCuentaId);
   prevVal.textContent = fmt(previous);
+  if (detail) {
+    const p = reconBookParts();
+    detail.textContent = `Movimientos ${fmt(p.derived)} · ajustes ${p.adjust >= 0 ? '+' : ''}${fmt(p.adjust)} · traslados ${p.tr >= 0 ? '+' : ''}${fmt(p.tr)}. Al guardar, la diferencia se suma al total.`;
+  }
 
   const amountEl = document.getElementById('rf-amount');
   const raw = amountEl.value.replace(/\D/g, '');
@@ -3381,8 +3601,125 @@ async function saveReconciliationForm() {
 /* ─────────────────────────────────────────────────────────
    EXPORT / IMPORT
 ───────────────────────────────────────────────────────── */
+/* MODAL: TRASLADO INTERNO entre Efectivo y cuentas digitales.
+   Ejemplo: cuenta X saca 30000 a efectivo → efectivo +30000 y
+   cuenta X −30000. No toca ingresos ni gastos. */
+let _trasFrom = 'cuenta:';
+let _trasTo = 'efectivo';
+
+function openTrasladoModal(presetFrom, presetTo) {
+  const eps = trasladoEndpoints();
+  _trasFrom = presetFrom && eps.some(e => e.id === presetFrom) ? presetFrom : (eps[0] ? eps[0].id : 'efectivo');
+  _trasTo = presetTo && eps.some(e => e.id === presetTo) && presetTo !== _trasFrom
+    ? presetTo
+    : (eps.map(e => e.id).find(id => id !== _trasFrom) || _trasFrom);
+  modalMode = 'traslado';
+  const today = todayISO();
+  const opts = sel => eps.map(e => `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.label)} · ${fmt(endpointBookBalance(e.id))}</option>`).join('');
+  openModal('Trasladar entre bolsillos', `
+    <p class="muted" style="margin-bottom:1rem">Mueve plata de un bolsillo a otro. No es ingreso ni gasto: el total no cambia.</p>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Desde *</label>
+        <select class="form-input" id="tr-from" onchange="switchTraslado()">${opts(_trasFrom)}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Hacia *</label>
+        <select class="form-input" id="tr-to" onchange="switchTraslado()">${opts(_trasTo)}</select>
+      </div>
+    </div>
+    <div class="recon-prev-box">
+      <span class="rp-label" id="tr-from-label">Disponible en origen</span>
+      <span class="rp-val" id="tr-from-val">$0</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Monto a trasladar *</label>
+      <input class="form-input" type="text" inputmode="numeric" data-money id="tr-amount"
+             placeholder="$ 0" oninput="updateTrasladoPreview()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fecha *</label>
+      <input class="form-input" type="date" id="tr-date" value="${today}">
+    </div>
+    <div class="recon-diff-preview" id="tr-preview">
+      <div class="rd-label" id="tr-preview-label">Resultado</div>
+      <div class="rd-val" id="tr-preview-val" style="font-size:1.05rem;line-height:1.5">—</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nota (opcional)</label>
+      <input class="form-input" type="text" id="tr-notes" placeholder="Ej: Saque de Nequi a efectivo">
+    </div>
+    <button class="btn-primary" onclick="saveTrasladoForm()">Guardar traslado</button>
+  `);
+  updateTrasladoPreview();
+}
+
+function switchTraslado() {
+  _trasFrom = document.getElementById('tr-from').value;
+  _trasTo = document.getElementById('tr-to').value;
+  updateTrasladoPreview();
+}
+
+function updateTrasladoPreview() {
+  const fromVal = document.getElementById('tr-from-val');
+  const box = document.getElementById('tr-preview');
+  const val = document.getElementById('tr-preview-val');
+  const lbl = document.getElementById('tr-preview-label');
+  const fromLbl = document.getElementById('tr-from-label');
+  if (!fromVal || !box || !val) return;
+  const disp = Number(endpointBookBalance(_trasFrom)) || 0;
+  fromVal.textContent = fmt(disp);
+  if (fromLbl) fromLbl.textContent = 'Disponible en ' + endpointLabel(_trasFrom);
+  const amount = parseMoney(document.getElementById('tr-amount').value);
+  if (_trasFrom === _trasTo) {
+    box.className = 'recon-diff-preview neg';
+    val.textContent = 'El origen y el destino no pueden ser el mismo';
+    return;
+  }
+  if (!amount) {
+    box.className = 'recon-diff-preview';
+    val.textContent = `${esc(endpointLabel(_trasFrom))} ${fmt(disp)} → ${esc(endpointLabel(_trasTo))} ${fmt(endpointBookBalance(_trasTo))}`;
+    return;
+  }
+  const queda = disp - amount;
+  const llega = (Number(endpointBookBalance(_trasTo)) || 0) + amount;
+  const ok = queda >= 0;
+  box.className = 'recon-diff-preview ' + (ok ? 'pos' : 'neg');
+  if (lbl) lbl.textContent = ok ? 'Resultado del traslado' : 'Te falta saldo en el origen';
+  val.innerHTML = `${esc(endpointLabel(_trasFrom))}: ${fmt(disp)} → <strong>${fmt(queda)}</strong><br>${esc(endpointLabel(_trasTo))}: ${fmt(endpointBookBalance(_trasTo))} → <strong>${fmt(llega)}</strong>`;
+}
+
+async function saveTrasladoForm() {
+  const amount = moneyVal('tr-amount');
+  const date = document.getElementById('tr-date').value;
+  const notes = document.getElementById('tr-notes').value.trim();
+  const eps = trasladoEndpoints().map(e => e.id);
+  const from = document.getElementById('tr-from').value;
+  const to = document.getElementById('tr-to').value;
+  const errMonto = validarMonto(amount);
+  if (errMonto) { showToast(errMonto); return; }
+  const errFecha = validarFecha(date);
+  if (errFecha) { showToast(errFecha); return; }
+  if (!eps.includes(from) || !eps.includes(to)) { showToast('⚠ Elige origen y destino válidos'); return; }
+  if (from === to) { showToast('⚠ El origen y el destino no pueden ser el mismo'); return; }
+  if (amount > (Number(endpointBookBalance(from)) || 0)) {
+    showToast('⚠ No tienes saldo suficiente en ' + endpointLabel(from) + ' (' + fmt(endpointBookBalance(from)) + ')');
+    return;
+  }
+  if (!tomarCandado()) return;
+  try {
+    await saveTraslado({ id: uid(), amount, from, to, date, notes, createdAt: Date.now() });
+    closeModal();
+    showToast(`✅ Trasladado ${fmt(amount)} de ${endpointLabel(from)} a ${endpointLabel(to)}`);
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error guardando traslado:', e);
+    showToast('❌ No se pudo guardar. Intenta de nuevo.');
+  } finally { soltarCandado(); }
+}
+
 function exportJSON() {
-  const data = { version: 6, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio, cuentas };
+  const data = { version: 7, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio, cuentas, traslados };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   download(blob, 'kasa-backup-' + todayISO() + '.json');
   showToast('📦 JSON descargado');
@@ -3438,7 +3775,7 @@ async function importJSON(file) {
     const fechaOk = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : todayISO();
     const TIPOS = ['income', 'expense', 'saving'];
     const ok = await appConfirm(
-      `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos y ${(data.balances||[]).length} conciliaciones? Esto reemplazará los datos actuales.`,
+      `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos, ${(data.balances||[]).length} conciliaciones y ${(data.traslados||[]).length} traslados? Esto reemplazará los datos actuales.`,
       'Importar'
     );
     if (!ok) return;
@@ -3494,6 +3831,16 @@ async function importJSON(file) {
     await Promise.all(balances.map(b => dbPut('balances', b)));
     await Promise.all(patrimonio.map(p => dbPut('patrimonio', p)));
     await Promise.all(cuentas.map(c => dbPut('cuentas', c)));
+    const epOk = v => v === 'efectivo' || v === 'transfer' || (typeof v === 'string' && v.indexOf('cuenta:') === 0 && idsCuenta.has(v.slice(7)));
+    traslados = comoArray(data.traslados).filter(tr => tr && tr.id).map(tr => ({
+      id: txt(tr.id, 40),
+      amount: num(tr.amount),
+      from: epOk(tr.from) ? tr.from : 'efectivo',
+      to: epOk(tr.to) ? tr.to : 'transfer',
+      date: fechaOk(tr.date), notes: txt(tr.notes, 200),
+      createdAt: Number(tr.createdAt) || Date.now()
+    })).filter(tr => tr.amount > 0 && tr.from !== tr.to);
+    await Promise.all(traslados.map(tr => dbPut('traslados', tr)));
     showToast('📂 Datos importados exitosamente');
     renderPage(currentPage);
   } catch (e) {
@@ -3916,6 +4263,12 @@ document.getElementById('add-btn-ahorro').addEventListener('click', () => {
 document.getElementById('add-btn-conciliacion').addEventListener('click', () => {
   openReconciliationModal('efectivo');
 });
+document.getElementById('add-btn-traslado').addEventListener('click', () => {
+  openTrasladoModal();
+});
+document.getElementById('dash-traslado').addEventListener('click', () => {
+  openTrasladoModal();
+});
 document.getElementById('add-btn-patrimonio').addEventListener('click', () => {
   openPatrimonioForm(null, 'activo');
 });
@@ -4034,6 +4387,7 @@ async function init() {
     transactions = transactions.length ? transactions : [];
     fijos = fijos.length ? fijos : [];
     balances = balances.length ? balances : [];
+    traslados = Array.isArray(traslados) ? traslados : [];
   }
   renderDashboard();
 

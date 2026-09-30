@@ -135,3 +135,23 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 
 ---
 *Kasa es una herramienta de organización personal; no constituye asesoría financiera profesional.*
+
+---
+
+## v2 · Conciliación que sí suma + Traslados internos
+
+Esta carpeta es la versión corregida; la raíz (`D:\Kasa\index.html`) queda como original.
+
+- **La conciliación ahora sí suma al total**: Total en Efectivo y Total en Digital
+  son saldos en libros (movimientos ± conciliaciones ± traslados). Antes la
+  diferencia solo se veía en el historial.
+- **Saldo previo corregido**: antes tomaba el monto de la última conciliación e
+  ignoraba los movimientos hechos después; ahora parte del saldo en libros actual.
+- **Traslados internos**: mueve plata entre Efectivo y tus cuentas digitales
+  (ej: cuenta X saca $30.000 a efectivo → efectivo +$30.000 y cuenta X −$30.000).
+  No son ingreso ni gasto: el total no cambia. Con validación de saldo suficiente,
+  historial propio en Conciliación, botón en el Dashboard y por cuenta.
+- La bolsa "Sin asignar" ahora incluye los ajustes del Total digital y los
+  traslados, y distingue movimientos sueltos de ajustes generales.
+- Datos: nuevo almacén `traslados` (IndexedDB v5), incluido en exportar/importar
+  JSON (versión 7). Al eliminar una cuenta, sus traslados pasan a Digital general.
