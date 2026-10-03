@@ -99,7 +99,7 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 1. Sube el `index.html` (u otros archivos) nuevos al repo.
 2. **Sube la versión** en `sw.js` para forzar el refresco del caché:
    ```js
-   const CACHE_VERSION = 'kasa-v1.7.1'; // ← incrementa este número
+   const CACHE_VERSION = 'kasa-v1.9.0'; // ← incrementa este número
    ```
 3. Al abrir la app instalada aparecerá el aviso **"Nueva versión
    disponible · Actualizar"**. Un toque y se recarga sola: ya no hace
@@ -155,3 +155,13 @@ Esta carpeta es la versión corregida; la raíz (`D:\Kasa\index.html`) queda com
   traslados, y distingue movimientos sueltos de ajustes generales.
 - Datos: nuevo almacén `traslados` (IndexedDB v5), incluido en exportar/importar
   JSON (versión 7). Al eliminar una cuenta, sus traslados pasan a Digital general.
+
+---
+
+## v3 · Préstamos con amortización + criterio contable
+
+- **🏦 Préstamos**: crea el préstamo (monto, cuota, Nº cuotas, tasa E.A., desembolso a tus bolsillos), paga cuotas o abonos con split **interés/capital** (estimación automática editable), tabla de amortización por Saldos Insolutos, estados y alertas. El saldo restante alimenta Pasivos y reportes.
+- **Pasivo por cuotas ⇒ tabla automática**: al agregar un pasivo, el checkbox "Es deuda por cuotas" pide solo lo necesario y crea el préstamo sin duplicar; el botón 📋 convierte pasivos manuales existentes.
+- **Auto-cálculo**: si el banco da la cuota se despeja la tasa sola (y viceversa, o el plazo); solo se llena el campo vacío.
+- **Criterio contable**: efectivo y digital en libros entran automáticos a Activos (con aviso anti-duplicado); en el ERI solo el interés es gasto, el capital amortiza el pasivo (fila de ajuste visible en PDF/CSV).
+- Datos: almacén `prestamos` (IndexedDB v6), JSON versión 8. Pagos antiguos migran como 100% capital (sin cambios de saldo).

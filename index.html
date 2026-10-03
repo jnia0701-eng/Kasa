@@ -867,9 +867,24 @@ body.modal-open{overflow:hidden}
     </div>
 
     <div class="section-title" style="margin-bottom:.75rem">🟢 Activos (lo que tienes)</div>
+    <div class="ant-alert" id="pat-duplicado-aviso" style="display:none;margin-bottom:.75rem">
+      <div class="ant-icon">⚠️</div>
+      <div style="font-size:.8rem">Tienes un activo manual "Efectivo" o "Cuenta bancaria": las filas automáticas ya incluyen esos saldos. Bórralo para no contar doble.</div>
+    </div>
     <div id="activos-list" style="margin-bottom:1.25rem"></div>
     <div class="section-title" style="margin-bottom:.75rem">🔴 Pasivos (lo que debes)</div>
-    <div id="pasivos-list"></div>
+    <div id="pasivos-list" style="margin-bottom:1.25rem"></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <div class="section-title" style="margin:0">🏦 Préstamos (con amortización)</div>
+      <button class="icon-btn" id="add-btn-prestamo" title="Nuevo préstamo">＋</button>
+    </div>
+    <div class="goal-card" id="prestamos-total-card" style="display:none;background:linear-gradient(135deg,rgba(255,75,75,.1),rgba(255,179,71,.1));border-color:rgba(255,75,75,.25)">
+      <div class="g-label">🔴 Total adeudado en préstamos</div>
+      <div class="g-amount" style="color:var(--danger)" id="prestamos-total-val">$0</div>
+      <div class="g-sub" id="prestamos-total-sub"></div>
+    </div>
+    <div id="prestamos-list"></div>
   </section>
 
   <!-- CONCILIACIÓN -->
@@ -1081,7 +1096,7 @@ body.modal-open{overflow:hidden}
    STORAGE — IndexedDB with LocalStorage fallback
 ───────────────────────────────────────────────────────── */
 const DB_NAME = 'kasa_db';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 let db = null;
 
 async function initDB() {
@@ -1106,6 +1121,8 @@ async function initDB() {
             d.createObjectStore('cuentas', { keyPath: 'id' });
           if (!d.objectStoreNames.contains('traslados'))
             d.createObjectStore('traslados', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('prestamos'))
+            d.createObjectStore('prestamos', { keyPath: 'id' });
         };
       } catch (innerErr) { reject(innerErr); }
     });
@@ -1119,7 +1136,7 @@ async function initDB() {
 /* Respaldo en memoria: si IndexedDB Y localStorage fallan (por ejemplo dentro
    de una vista previa en sandbox o un WebView restringido), la app sigue
    funcionando durante la sesión en lugar de que los botones "no hagan nada". */
-const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [], cuentas: [], traslados: [] };
+const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [], cuentas: [], traslados: [], prestamos: [] };
 
 function safeLSGet(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -1214,6 +1231,7 @@ let balances = [];
 let patrimonio = [];
 let cuentas = [];   // Cuentas digitales (desglose del saldo "transfer")
 let traslados = []; // Traspasos internos entre Efectivo y cuentas digitales (no son ingreso ni gasto)
+let prestamos = []; // Prestamos con amortizacion: deuda viva que se paga por cuotas
 
 const INCOME_CATS = ['Salario', 'Freelance', 'Ventas', 'Inversiones', 'Regalos', 'Otros ingresos'];
 const EXPENSE_CATS = ['Comida', 'Transporte', 'Salud', 'Entretenimiento', 'Ropa', 'Café/Snacks', 'Tecnología', 'Educación', 'Belleza', 'Hogar', 'Otros gastos'];
@@ -1557,6 +1575,7 @@ async function loadData() {
   patrimonio = await dbGet('patrimonio');
   cuentas = await dbGet('cuentas');
   traslados = await dbGet('traslados');
+  prestamos = await dbGet('prestamos');
 }
 
 async function saveTransaction(tx) {
@@ -1699,11 +1718,26 @@ function manualActivos() {
 function manualPasivos() {
   return patrimonio.filter(p => p.kind === 'pasivo').reduce((s, p) => s + p.amount, 0);
 }
+function prestamosSaldoTotal() {
+  return prestamos.reduce((s, p) => s + prestamoSaldo(p), 0);
+}
+
 function patrimonioTotals() {
   const ahorros = totalAhorrado();
-  const activos = manualActivos() + ahorros;
-  const pasivos = manualPasivos();
-  return { ahorros, activos, pasivos, neto: activos - pasivos };
+  // El disponible (efectivo y digital en libros) ES activo corriente:
+  // entra automatico; solo se suman saldos positivos.
+  const bk = accountTotals();
+  const autoCaja = Math.max(0, bk.cash);
+  const autoDigital = Math.max(0, bk.digital);
+  const activos = manualActivos() + ahorros + autoCaja + autoDigital;
+  // Pasivos = manuales + saldo vivo de prestamos con amortizacion.
+  // Si migras una deuda manual a un prestamo, borra la entrada manual
+  // para no contarla dos veces. Igual con "Efectivo"/"Cuenta bancaria"
+  // manuales: las filas automaticas ya los incluyen.
+  const pasivosManuales = manualPasivos();
+  const pasivosPrestamos = prestamosSaldoTotal();
+  const pasivos = pasivosManuales + pasivosPrestamos;
+  return { ahorros, activos, pasivos, pasivosManuales, pasivosPrestamos, autoCaja, autoDigital, neto: activos - pasivos };
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -2767,10 +2801,15 @@ function renderPatrimonio() {
   netoEl.textContent = fmt(tot.neto);
   netoEl.style.color = tot.neto >= 0 ? 'var(--ok)' : 'var(--danger)';
   document.getElementById('pat-neto-sub').textContent =
-    `Incluye ${fmt(tot.ahorros)} de ahorros acumulados como activo.`;
+    `Incluye ${fmt(tot.ahorros)} de ahorros + ${fmt(tot.autoCaja)} en efectivo + ${fmt(tot.autoDigital)} en digital (automáticos).`;
 
   renderPatrimonioList('activo', 'activos-list', '🟢', 'Sin activos registrados. Toca + para agregar.');
   renderPatrimonioList('pasivo', 'pasivos-list', '🔴', 'Sin pasivos registrados. ¡Bien! O toca + para agregar una deuda.');
+  // Aviso anti-duplicado: las filas automaticas ya traen caja y cuentas.
+  const duplicaCaja = patrimonio.some(p => p.kind === 'activo' && (p.category === 'Efectivo' || p.category === 'Cuenta bancaria'));
+  const dupEl = document.getElementById('pat-duplicado-aviso');
+  if (dupEl) dupEl.style.display = duplicaCaja ? 'block' : 'none';
+  renderPrestamos();
 }
 
 function renderPatrimonioList(kind, elId, emoji, emptyMsg) {
@@ -2778,17 +2817,37 @@ function renderPatrimonioList(kind, elId, emoji, emptyMsg) {
   const items = patrimonio.filter(p => p.kind === kind)
     .sort((a, b) => b.amount - a.amount);
 
-  // La lista de activos añade una fila automática con los ahorros acumulados.
+  // Filas automaticas: ahorros + saldos reales en libros.
+  // Criterio contable: el disponible (efectivo y digital) es activo
+  // corriente y entra solo; un activo manual con categoria "Efectivo" o
+  // "Cuenta bancaria" duplicaria y debe borrarse.
   let autoRow = '';
   if (kind === 'activo') {
     const ah = totalAhorrado();
-    if (ah > 0) autoRow = `
+    if (ah > 0) autoRow += `
       <div class="fijo-item" style="opacity:.85">
         <div class="fijo-info">
           <div class="f-name">Ahorros acumulados 💰</div>
           <div class="f-sub">Automático · desde tus movimientos de ahorro</div>
         </div>
         <div class="fijo-amount paid">${fmt(ah)}</div>
+      </div>`;
+    const bk = accountTotals();
+    if (bk.cash > 0) autoRow += `
+      <div class="fijo-item" style="opacity:.85">
+        <div class="fijo-info">
+          <div class="f-name">Efectivo en caja 💵</div>
+          <div class="f-sub">Automático · saldo en libros (movimientos ± conciliación ± traslados)</div>
+        </div>
+        <div class="fijo-amount paid">${fmt(bk.cash)}</div>
+      </div>`;
+    if (bk.digital > 0) autoRow += `
+      <div class="fijo-item" style="opacity:.85">
+        <div class="fijo-info">
+          <div class="f-name">Cuentas digitales 💳</div>
+          <div class="f-sub">Automático · saldo en libros de todas tus cuentas</div>
+        </div>
+        <div class="fijo-amount paid">${fmt(bk.digital)}</div>
       </div>`;
   }
 
@@ -2804,10 +2863,15 @@ function renderPatrimonioList(kind, elId, emoji, emptyMsg) {
       </div>
       <div class="fijo-amount" style="color:${kind === 'activo' ? 'var(--ok)' : 'var(--danger)'}">${fmt(p.amount)}</div>
       <div class="tx-actions" style="margin-left:.5rem">
+        ${kind === 'pasivo' ? `<button class="tx-btn" data-gen="${p.id}" title="Generar tabla de amortización">📋</button>` : ''}
         <button class="tx-btn edit" data-id="${p.id}">✏️</button>
         <button class="tx-btn del" data-id="${p.id}">🗑</button>
       </div>
     </div>`).join('');
+
+  list.querySelectorAll('[data-gen]').forEach(btn => {
+    btn.onclick = () => convertirPasivoATabla(btn.dataset.gen);
+  });
 
   list.querySelectorAll('.tx-btn.edit').forEach(btn => {
     btn.onclick = () => openPatrimonioForm(patrimonio.find(x => x.id === btn.dataset.id));
@@ -2822,6 +2886,10 @@ function openPatrimonioForm(existing, defaultKind) {
   const cats = kind === 'activo' ? ACTIVO_CATS : PASIVO_CATS;
   const p = existing || { name: '', amount: '', category: cats[0], notes: '', kind };
   _patKind = kind;
+  _patIsNew = !existing;
+  const epsDes = trasladoEndpoints();
+  const optsDes = `<option value="">— Sin desembolso (la plata ya entró antes) —</option>` +
+    epsDes.map(e => `<option value="${e.id}">${esc(e.label)} · ${fmt(endpointBookBalance(e.id))}</option>`).join('');
   openModal((existing ? 'Editar' : 'Nuevo') + ' registro de patrimonio', `
     <div class="form-group">
       <label class="form-label">Tipo *</label>
@@ -2836,12 +2904,55 @@ function openPatrimonioForm(existing, defaultKind) {
     </div>
     <div class="form-group">
       <label class="form-label">Monto actual *</label>
-      <input class="form-input" type="text" inputmode="numeric" data-money id="pf-amount"
+      <input class="form-input" type="text" inputmode="numeric" data-money id="pf-amount" oninput="autoCalcPrestamo('pf')"
              placeholder="$ 0" value="${p.amount ? fmtInput(p.amount) : ''}">
     </div>
     <div class="form-group">
       <label class="form-label">Categoría *</label>
       <select class="form-input" id="pf-category"></select>
+    </div>
+    <div id="pf-cuotas-box" style="display:${kind === 'pasivo' && !existing ? 'block' : 'none'}">
+      <label style="display:flex;align-items:flex-start;gap:.6rem;cursor:pointer;margin-bottom:1rem">
+        <input type="checkbox" id="pf-cuotas" onchange="document.getElementById('pf-cuotas-fields').style.display = this.checked ? 'block' : 'none'"
+               style="width:20px;height:20px;flex-shrink:0;margin-top:1px;accent-color:var(--text)">
+        <span>
+          <span style="font-weight:600;font-size:.88rem">📋 Es deuda por cuotas: generar tabla de amortización</span>
+          <span style="display:block;font-size:.75rem;color:var(--text2);margin-top:.15rem">
+            Se crea como préstamo (cuotas, intereses, tabla) y NO como pasivo fijo, para no contar doble.
+          </span>
+        </span>
+      </label>
+      <div id="pf-cuotas-fields" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Cuota mensual *</label>
+            <input class="form-input" type="text" inputmode="numeric" data-money id="pf-cuota" oninput="autoCalcPrestamo('pf')" placeholder="$ 0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nº de cuotas *</label>
+            <input class="form-input" type="number" id="pf-ncuotas" oninput="autoCalcPrestamo('pf')" value="12" min="1" max="360">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Día de pago *</label>
+            <input class="form-input" type="number" id="pf-diapago" value="10" min="1" max="31">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tasa E.A. % (opc.)</label>
+            <input class="form-input" type="number" id="pf-tasa" oninput="autoCalcPrestamo('pf')" placeholder="Ej: 24" min="0" max="100" step="any">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Primer vencimiento *</label>
+          <input class="form-input" type="date" id="pf-start" value="${todayISO()}">
+        </div>
+        <div class="muted" id="pf-calc-note" style="font-size:.75rem;margin:-.5rem 0 1rem;min-height:1em"></div>
+        <div class="form-group">
+          <label class="form-label">¿Entra desembolso a tus bolsillos?</label>
+          <select class="form-input" id="pf-desembolso">${optsDes}</select>
+        </div>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Nota (opcional)</label>
@@ -2855,11 +2966,14 @@ function openPatrimonioForm(existing, defaultKind) {
 }
 
 let _patKind = 'activo';
+let _patIsNew = true;
 function switchPatKind(kind) {
   _patKind = kind;
   document.getElementById('pk-activo').classList.toggle('active', kind === 'activo');
   document.getElementById('pk-pasivo').classList.toggle('active', kind === 'pasivo');
   fillPatCategories();
+  const box = document.getElementById('pf-cuotas-box');
+  if (box) box.style.display = (kind === 'pasivo' && _patIsNew) ? 'block' : 'none';
 }
 function fillPatCategories(selected) {
   const cats = _patKind === 'activo' ? ACTIVO_CATS : PASIVO_CATS;
@@ -2875,6 +2989,13 @@ async function savePatrimonioForm(existingId) {
   if (!name) { showToast('⚠ Ingresa un nombre'); return; }
   const errMonto = validarMonto(amount);
   if (errMonto) { showToast(errMonto); return; }
+
+  // Pasivo por cuotas: no se guarda como pasivo fijo; se crea el préstamo
+  // con su tabla de amortización (pide la info solo en este caso).
+  const cuotasChk = document.getElementById('pf-cuotas');
+  if (_patKind === 'pasivo' && _patIsNew && !existingId && cuotasChk && cuotasChk.checked) {
+    return savePrestamoDesdePasivo({ name, amount, category, notes });
+  }
 
   const item = { id: existingId || uid(), kind: _patKind, name, amount, category, notes };
   if (!tomarCandado()) return;
@@ -2897,6 +3018,673 @@ async function confirmDeletePatrimonio(id) {
     renderPatrimonio();
   } catch (e) {
     console.error('Error eliminando patrimonio:', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
+}
+
+/* PRESTAMOS CON AMORTIZACION
+   Deuda viva que se paga por cuotas. A diferencia de un pasivo manual
+   (foto estatica), cada pago descuenta del saldo y genera su movimiento:
+     - Desembolso (opcional): crea un INGRESO en el bolsillo elegido.
+     - Cada cuota: crea un GASTO desde el bolsillo elegido y reduce el saldo.
+   El saldo restante alimenta Pasivos/Balance General automaticamente. */
+async function savePrestamo(item) {
+  await dbPut('prestamos', item);
+  const idx = prestamos.findIndex(x => x.id === item.id);
+  if (idx >= 0) prestamos[idx] = item; else prestamos.push(item);
+}
+
+async function deletePrestamo(id) {
+  await dbDelete('prestamos', id);
+  prestamos = prestamos.filter(x => x.id !== id);
+}
+
+function prestamoDia(p) { return Math.min(Math.max(parseInt(p.diaPago) || 1, 1), 31); }
+
+function prestamoPagado(p) {
+  return (p.pagos || []).reduce((s, x) => s + (Number(x.monto) || 0), 0);
+}
+
+// Normalizacion con migracion implicita: pagos viejos sin split se toman
+// 100% como capital, asi el saldo historico no cambia al actualizar.
+function pagoInteres(x) {
+  if (x.interes === undefined || x.interes === null) return 0;
+  return Math.max(0, Math.min(Number(x.interes) || 0, Number(x.monto) || 0));
+}
+function pagoCapital(x) {
+  return Math.max(0, (Number(x.monto) || 0) - pagoInteres(x));
+}
+
+function prestamoCapitalPagado(p) {
+  return (p.pagos || []).reduce((s, x) => s + pagoCapital(x), 0);
+}
+function prestamoInteresesPagados(p) {
+  return (p.pagos || []).reduce((s, x) => s + pagoInteres(x), 0);
+}
+
+// Criterio contable (Saldos Insolutos): la deuda solo baja con el CAPITAL.
+// El interes es gasto del periodo (va al ERI), no reduce el pasivo.
+function prestamoSaldo(p) {
+  return Math.max(0, (Number(p.initialAmount) || 0) - prestamoCapitalPagado(p));
+}
+
+// Tasa mensual equivalente desde la E.A. registrada (si no hay, 0).
+function prestamoTasaMensual(p) {
+  const raw = String(p.tasa == null ? '' : p.tasa).replace(',', '.').replace('%', '').trim();
+  const ea = parseFloat(raw);
+  if (!Number.isFinite(ea) || ea <= 0) return 0;
+  return Math.pow(1 + ea / 100, 1 / 12) - 1;
+}
+
+// Interes y capital de cuotas cuyo MOVIMIENTO cae en el mes dado.
+// Se usa la fecha del tx enlazado (registro contable); si el pago no
+// genero movimiento, la fecha del pago.
+function prestamoMontosDelMes(month, year) {
+  let capital = 0, interes = 0;
+  const fechaTx = {};
+  transactions.forEach(t => { fechaTx[t.id] = t.date; });
+  prestamos.forEach(p => (p.pagos || []).forEach(x => {
+    const f = (x.txId && fechaTx[x.txId]) || x.fecha;
+    if (isSameMonth(f, month, year)) {
+      capital += pagoCapital(x);
+      interes += pagoInteres(x);
+    }
+  }));
+  return { capital, interes };
+}
+
+// Interes estimado de una cuota: saldo insoluto x tasa mensual.
+// Sin tasa registrada devuelve 0 (todo se toma como capital).
+function estimarInteresCuota(p, monto) {
+  const im = prestamoTasaMensual(p);
+  if (im <= 0) return 0;
+  return Math.max(0, Math.min(Math.round(prestamoSaldo(p) * im), monto));
+}
+
+function prestamoNPagadas(p) { return (p.pagos || []).length; }
+
+// Proxima cuota: primer vencimiento + N cuotas ya pagadas.
+function prestamoProximoVenc(p) {
+  const base = parseLocalDate(p.startDate);
+  const b = isNaN(base.getTime()) ? hoyLocal() : base;
+  return sumarMeses(b, prestamoNPagadas(p), prestamoDia(p));
+}
+
+function prestamoEstado(p) {
+  if (prestamoSaldo(p) <= 0) return 'saldado';
+  const dias = Math.round((prestamoProximoVenc(p) - hoyLocal()) / 86400000);
+  if (dias < 0) return 'vencido';
+  if (dias <= 5) return 'proximo';
+  return 'aldia';
+}
+
+function prestamoCuotaSugerida(p) {
+  return Math.min(Number(p.cuota) || 0, prestamoSaldo(p));
+}
+
+// Mapea un endpoint (efectivo / transfer / cuenta:id) a campos de transaccion.
+function endpointTxAccount(ep) {
+  if (ep === 'efectivo') return { account: 'efectivo', cuentaId: '' };
+  if (ep === 'transfer') return { account: 'transfer', cuentaId: '' };
+  if (ep && ep.indexOf('cuenta:') === 0) return { account: 'transfer', cuentaId: ep.slice(7) };
+  return null;
+}
+
+/* CALCULO AUTOMATICO CUOTA <-> TASA <-> PLAZO
+   El banco suele dar la cuota: si falta la tasa se despeja sola, y
+   viceversa (si falta la cuota se calcula de monto + plazo + tasa;
+   si falta el plazo se despeja también). Solo se llena el campo VACIO,
+   nunca se pisa lo que el usuario escribió. */
+function cuotaFromTasa(P, n, eaAnual) {
+  if (!(P > 0) || !(n >= 1)) return 0;
+  const i = Math.pow(1 + Math.max(0, eaAnual) / 100, 1 / 12) - 1;
+  if (i < 1e-12) return P / n;
+  return P * i / (1 - Math.pow(1 + i, -n));
+}
+function tasaFromCuota(P, n, cuota) {
+  if (!(P > 0) || !(n >= 1) || !(cuota > 0)) return null;
+  if (cuota <= P / n) return 0;
+  const calc = i => i < 1e-12 ? P / n : P * i / (1 - Math.pow(1 + i, -n));
+  let lo = 0, hi = 0.01;
+  while (calc(hi) < cuota && hi < 10) hi *= 2;
+  for (let k = 0; k < 80; k++) {
+    const mid = (lo + hi) / 2;
+    if (calc(mid) < cuota) lo = mid; else hi = mid;
+  }
+  return (Math.pow(1 + (lo + hi) / 2, 12) - 1) * 100;
+}
+function nFromCuotaTasa(P, cuota, eaAnual) {
+  if (!(P > 0) || !(cuota > 0)) return 0;
+  const i = Math.pow(1 + Math.max(0, eaAnual) / 100, 1 / 12) - 1;
+  if (i < 1e-12) return Math.ceil(P / cuota);
+  if (cuota <= P * i) return 0; // la cuota no alcanza ni los intereses
+  return Math.ceil(-Math.log(1 - P * i / cuota) / Math.log(1 + i));
+}
+function leerTasaInput(id) {
+  const el = document.getElementById(id);
+  if (!el || String(el.value).trim() === '') return null;
+  const v = parseFloat(String(el.value).replace(',', '.'));
+  return Number.isFinite(v) && v >= 0 ? v : null;
+}
+// px = 'pr' (form préstamo) o 'pf' (form patrimonio/pasivo).
+function autoCalcPrestamo(px) {
+  const g = s => document.getElementById(px + s);
+  const mEl = g('-amount'), cEl = g('-cuota'), nEl = g('-ncuotas'), tEl = g('-tasa'), noteEl = g('-calc-note');
+  if (!mEl || !cEl || !nEl || !tEl) return;
+  const note = t => { if (noteEl) noteEl.textContent = t; };
+  const P = parseMoney(mEl.value);
+  if (!(P > 0)) { note(''); return; }
+  const cuotaVacia = parseMoney(cEl.value) <= 0;
+  const nRaw = String(nEl.value).trim();
+  const nVacio = nRaw === '';
+  const n = parseInt(nRaw);
+  const nOk = !nVacio && Number.isFinite(n) && n >= 1 && n <= 360;
+  const tasa = leerTasaInput(px + '-tasa');
+  if (cuotaVacia && nOk && tasa !== null && tasa > 0) {
+    const c = cuotaFromTasa(P, n, tasa);
+    if (c > 0) { cEl.value = fmtInput(Math.round(c)); note('✓ Cuota calculada de monto + plazo + tasa.'); }
+    return;
+  }
+  if (nVacio && !cuotaVacia) {
+    const nn = nFromCuotaTasa(P, parseMoney(cEl.value), tasa === null ? 0 : tasa);
+    if (nn > 0 && nn <= 360) { nEl.value = nn; note('✓ Nº de cuotas calculado.'); }
+    return;
+  }
+  if (tEl.value.trim() === '' && !cuotaVacia && nOk) {
+    const t = tasaFromCuota(P, n, parseMoney(cEl.value));
+    if (t !== null && t >= 0 && t <= 1000) { tEl.value = String(Math.round(t * 100) / 100); note('✓ Tasa E.A. calculada de cuota + monto + plazo.'); }
+    return;
+  }
+  note('');
+}
+
+function renderPrestamos() {
+  const card = document.getElementById('prestamos-total-card');
+  const list = document.getElementById('prestamos-list');
+  const total = prestamosSaldoTotal();
+  if (!prestamos.length) {
+    card.style.display = 'none';
+    list.innerHTML = '<div class="empty"><div class="e-icon">🏦</div>Sin préstamos. Toca ＋ para registrar uno (banco, tarjeta, personal) y pagar sus cuotas.</div>';
+    return;
+  }
+  const activos = prestamos.filter(p => prestamoSaldo(p) > 0);
+  const cuotaMes = activos.reduce((s, p) => s + (Number(p.cuota) || 0), 0);
+  card.style.display = 'block';
+  document.getElementById('prestamos-total-val').textContent = fmt(total);
+  document.getElementById('prestamos-total-sub').textContent =
+    `${activos.length} activo(s) · cuota mensual ${fmt(cuotaMes)} · ya incluido en Total Pasivos`;
+
+  const orden = [...prestamos].sort((a, b) => prestamoSaldo(b) - prestamoSaldo(a));
+  list.innerHTML = orden.map(p => {
+    const saldo = prestamoSaldo(p);
+    const pagado = prestamoPagado(p);
+    const total_ini = Number(p.initialAmount) || 0;
+    const pct = total_ini > 0 ? Math.min(100, Math.round(pagado / total_ini * 100)) : 0;
+    const n = prestamoNPagadas(p);
+    const est = prestamoEstado(p);
+    const chip = est === 'saldado'
+      ? '<span class="badge paid">✓ Saldado</span>'
+      : est === 'vencido'
+        ? '<span class="badge overdue">🔴 Cuota vencida</span>'
+        : est === 'proximo'
+          ? `<span class="badge unpaid">⏳ Próxima: ${fechaCorta(todayISO(prestamoProximoVenc(p)))}</span>`
+          : `<span class="badge transfer">✓ Al día · próxima: ${fechaCorta(todayISO(prestamoProximoVenc(p)))}</span>`;
+    return `
+    <div class="fijo-item" style="align-items:flex-start">
+      <div class="fijo-info">
+        <div class="f-name">🏦 ${esc(p.name)}</div>
+        <div class="f-sub">${p.entidad ? esc(p.entidad) + ' · ' : ''}Cuota ${n} de ${p.totalCuotas} · ${fmt(p.cuota)}/mes${p.tasa ? ' · ' + esc(String(p.tasa)) + '% E.A.' : ''}</div>
+        <div style="margin:.4rem 0">${chip}</div>
+        <div class="prog-bar"><div class="prog-fill ${est === 'saldado' ? 'green' : 'red'}" style="width:${pct}%"></div></div>
+        <div style="font-size:.72rem;color:var(--text2)">${fmt(pagado)} pagado de ${fmt(total_ini)} (${pct}%)</div>
+        <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+          ${saldo > 0 ? `<button class="filter-chip" data-pay-pres="${p.id}">💰 Pagar cuota</button>` : ''}
+          <button class="filter-chip" data-tabla-pres="${p.id}">📋 Tabla</button>
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="fijo-amount" style="color:${saldo > 0 ? 'var(--danger)' : 'var(--ok)'}">${fmt(saldo)}</div>
+        <div style="font-size:.7rem;color:var(--text2)">restante</div>
+      </div>
+      <div class="tx-actions" style="margin-left:.5rem">
+        <button class="tx-btn edit" data-edit-pres="${p.id}">✏️</button>
+        <button class="tx-btn del" data-del-pres="${p.id}">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-pay-pres]').forEach(b => { b.onclick = () => openPagoPrestamoModal(b.dataset.payPres); });
+  list.querySelectorAll('[data-tabla-pres]').forEach(b => { b.onclick = () => openTablaPrestamo(b.dataset.tablaPres); });
+  list.querySelectorAll('[data-edit-pres]').forEach(b => { b.onclick = () => openPrestamoForm(prestamos.find(x => x.id === b.dataset.editPres)); });
+  list.querySelectorAll('[data-del-pres]').forEach(b => { b.onclick = () => confirmDeletePrestamo(b.dataset.delPres); });
+}
+
+// Pasivo manual que se va a convertir en prestamo (se borra al guardar).
+let _convertirPasivoId = '';
+
+// Crea el prestamo con tabla desde el formulario de patrimonio.
+// La info de cuotas solo se pide en este caso (checkbox pf-cuotas).
+async function savePrestamoDesdePasivo(base) {
+  const cuota = moneyVal('pf-cuota');
+  const totalCuotas = parseInt(document.getElementById('pf-ncuotas').value);
+  const diaPago = parseInt(document.getElementById('pf-diapago').value);
+  const tasa = document.getElementById('pf-tasa').value.trim();
+  const startDate = document.getElementById('pf-start').value;
+  const errCuota = validarMonto(cuota);
+  if (errCuota) { showToast('⚠ Ingresa la cuota mensual'); return; }
+  if (!Number.isFinite(totalCuotas) || totalCuotas < 1 || totalCuotas > 360) { showToast('⚠ Nº de cuotas entre 1 y 360'); return; }
+  if (!Number.isFinite(diaPago) || diaPago < 1 || diaPago > 31) { showToast('⚠ Día de pago entre 1 y 31'); return; }
+  const errFecha = validarFecha(startDate);
+  if (errFecha) { showToast(errFecha); return; }
+
+  if (!tomarCandado()) return;
+  try {
+    let desembolsoEndpoint = '', desembolsoTxId = '';
+    const sel = document.getElementById('pf-desembolso');
+    const ep = sel ? sel.value : '';
+    const acc = ep ? endpointTxAccount(ep) : null;
+    if (ep && acc) {
+      const tx = {
+        id: uid(), type: 'income', amount: base.amount, date: todayISO(),
+        category: 'Préstamo recibido', account: acc.account, cuentaId: acc.cuentaId,
+        notes: 'Desembolso préstamo: ' + base.name
+      };
+      await saveTransaction(tx);
+      desembolsoEndpoint = ep;
+      desembolsoTxId = tx.id;
+    }
+    await savePrestamo({
+      id: uid(), name: base.name, entidad: base.category, tasa,
+      initialAmount: base.amount, cuota, totalCuotas, diaPago, startDate,
+      notes: base.notes, desembolsoEndpoint, desembolsoTxId,
+      pagos: [], createdAt: Date.now()
+    });
+    closeModal();
+    showToast('📋 Préstamo creado con tabla de amortización (no se duplicó en pasivos)');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error creando prestamo desde pasivo:', e);
+    showToast('❌ No se pudo crear. Intenta de nuevo.');
+  } finally { soltarCandado(); }
+}
+
+// Convierte un pasivo manual existente: prellena el formulario de
+// prestamo y, al guardar, borra el manual para no contar doble.
+function convertirPasivoATabla(id) {
+  const p = patrimonio.find(x => x.id === id);
+  if (!p || p.kind !== 'pasivo') return;
+  openPrestamoForm({
+    name: p.name, entidad: p.category, initialAmount: p.amount,
+    notes: (p.notes ? p.notes + ' · ' : '') + 'Convertido desde pasivo manual'
+  });
+  _convertirPasivoId = id;
+}
+
+function openPrestamoForm(existing) {
+  const esEdicion = !!(existing && existing.id);
+  const p = existing || {
+    name: '', entidad: '', initialAmount: '', cuota: '',
+    totalCuotas: 12, diaPago: 10, startDate: todayISO(), tasa: '', notes: ''
+  };
+  const eps = trasladoEndpoints();
+  const opts = sel => `<option value="">— Sin desembolso (ya recibí la plata) —</option>` +
+    eps.map(e => `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.label)} · ${fmt(endpointBookBalance(e.id))}</option>`).join('');
+  openModal((esEdicion ? 'Editar' : 'Nuevo') + ' préstamo', `
+    <div class="form-group">
+      <label class="form-label">Nombre del préstamo *</label>
+      <input class="form-input" type="text" id="pr-name" placeholder="Ej: Préstamo Bancolombia" value="${esc(p.name)}">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Entidad (opcional)</label>
+        <input class="form-input" type="text" id="pr-entidad" placeholder="Ej: Bancolombia" value="${esc(p.entidad || '')}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tasa E.A. % (opcional)</label>
+        <input class="form-input" type="number" id="pr-tasa" oninput="autoCalcPrestamo('pr')" placeholder="Ej: 24" value="${esc(p.tasa || '')}" min="0" max="100" step="any">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Monto total de la deuda *</label>
+        <input class="form-input" type="text" inputmode="numeric" data-money id="pr-amount" oninput="autoCalcPrestamo('pr')"
+               placeholder="$ 0" value="${p.initialAmount ? fmtInput(p.initialAmount) : ''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cuota mensual *</label>
+        <input class="form-input" type="text" inputmode="numeric" data-money id="pr-cuota" oninput="autoCalcPrestamo('pr')"
+               placeholder="$ 0" value="${p.cuota ? fmtInput(p.cuota) : ''}">
+      </div>
+    </div>
+    <div class="muted" id="pr-calc-note" style="font-size:.75rem;margin:-.5rem 0 1rem;min-height:1em"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Nº de cuotas *</label>
+        <input class="form-input" type="number" id="pr-ncuotas" oninput="autoCalcPrestamo('pr')" value="${p.totalCuotas || 12}" min="1" max="360">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Día de pago *</label>
+        <input class="form-input" type="number" id="pr-diapago" value="${p.diaPago || 10}" min="1" max="31">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Primer vencimiento *</label>
+      <input class="form-input" type="date" id="pr-start" value="${esc(p.startDate || todayISO())}">
+    </div>
+    ${esEdicion
+      ? `<p class="muted" style="margin-bottom:1rem">Ya tiene ${prestamoNPagadas(p)} cuota(s) pagada(s) por ${fmt(prestamoPagado(p))}. El desembolso y los pagos se conservan.</p>`
+      : `<div class="form-group">
+          <label class="form-label">¿Dónde entra el desembolso?</label>
+          <select class="form-input" id="pr-desembolso">${opts('')}</select>
+          <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+            Si el banco aún no te entrega la plata, elige el bolsillo: se crea un ingreso y tu saldo sube.
+          </div>
+        </div>`}
+    <div class="form-group">
+      <label class="form-label">Nota (opcional)</label>
+      <input class="form-input" type="text" id="pr-notes" placeholder="Sin nota" value="${esc(p.notes || '')}">
+    </div>
+    <button class="btn-primary" onclick="savePrestamoForm('${existing?.id || ''}')">
+      ${esEdicion ? 'Guardar cambios' : 'Crear préstamo'}
+    </button>
+  `);
+}
+
+async function savePrestamoForm(existingId) {
+  const name = document.getElementById('pr-name').value.trim();
+  const entidad = document.getElementById('pr-entidad').value.trim();
+  const tasa = document.getElementById('pr-tasa').value.trim();
+  const initialAmount = moneyVal('pr-amount');
+  const cuota = moneyVal('pr-cuota');
+  const totalCuotas = parseInt(document.getElementById('pr-ncuotas').value);
+  const diaPago = parseInt(document.getElementById('pr-diapago').value);
+  const startDate = document.getElementById('pr-start').value;
+  const notes = document.getElementById('pr-notes').value.trim();
+  if (!name) { showToast('⚠ Ingresa el nombre del préstamo'); return; }
+  const errMonto = validarMonto(initialAmount);
+  if (errMonto) { showToast(errMonto); return; }
+  const errCuota = validarMonto(cuota);
+  if (errCuota) { showToast('⚠ Ingresa la cuota mensual'); return; }
+  if (!Number.isFinite(totalCuotas) || totalCuotas < 1 || totalCuotas > 360) { showToast('⚠ Nº de cuotas entre 1 y 360'); return; }
+  if (!Number.isFinite(diaPago) || diaPago < 1 || diaPago > 31) { showToast('⚠ Día de pago entre 1 y 31'); return; }
+  const errFecha = validarFecha(startDate);
+  if (errFecha) { showToast(errFecha); return; }
+
+  const previo = existingId ? prestamos.find(x => x.id === existingId) : null;
+  if (existingId && !previo) return;
+
+  if (!tomarCandado()) return;
+  try {
+    let desembolsoEndpoint = previo ? (previo.desembolsoEndpoint || '') : '';
+    let desembolsoTxId = previo ? (previo.desembolsoTxId || '') : '';
+    // Desembolso solo al crear: ingreso real en el bolsillo elegido.
+    if (!existingId) {
+      const sel = document.getElementById('pr-desembolso');
+      const ep = sel ? sel.value : '';
+      const acc = ep ? endpointTxAccount(ep) : null;
+      if (ep && acc) {
+        const tx = {
+          id: uid(), type: 'income', amount: initialAmount, date: todayISO(),
+          category: 'Préstamo recibido', account: acc.account, cuentaId: acc.cuentaId,
+          notes: 'Desembolso préstamo: ' + name
+        };
+        await saveTransaction(tx);
+        desembolsoEndpoint = ep;
+        desembolsoTxId = tx.id;
+      }
+    }
+    await savePrestamo({
+      id: existingId || uid(), name, entidad, tasa, initialAmount, cuota,
+      totalCuotas, diaPago, startDate, notes,
+      desembolsoEndpoint, desembolsoTxId,
+      pagos: (previo && previo.pagos) || [],
+      createdAt: previo ? previo.createdAt : Date.now()
+    });
+    // Conversion: el manual se borra para no contar la deuda dos veces.
+    let convertido = false;
+    if (!existingId && _convertirPasivoId) {
+      await deletePatrimonio(_convertirPasivoId);
+      _convertirPasivoId = '';
+      convertido = true;
+    }
+    closeModal();
+    showToast(existingId ? '✏️ Préstamo actualizado' : (convertido ? '📋 Pasivo convertido a préstamo con tabla' : '✅ Préstamo creado'));
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error guardando prestamo:', e);
+    showToast('❌ No se pudo guardar. Intenta de nuevo.');
+  } finally { soltarCandado(); }
+}
+
+function openPagoPrestamoModal(id) {
+  const p = prestamos.find(x => x.id === id);
+  if (!p) return;
+  const saldo = prestamoSaldo(p);
+  if (saldo <= 0) { showToast('✓ Préstamo saldado'); return; }
+  const sugerida = prestamoCuotaSugerida(p);
+  const eps = trasladoEndpoints();
+  const opts = eps.map(e => `<option value="${e.id}">${esc(e.label)} · ${fmt(endpointBookBalance(e.id))}</option>`).join('');
+  openModal('Pagar cuota', `
+    <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
+      <div style="font-weight:600;font-size:.95rem">🏦 ${esc(p.name)}</div>
+      <div style="font-size:.8rem;color:var(--text2);margin-top:.15rem">
+        Cuota ${prestamoNPagadas(p) + 1} de ${p.totalCuotas} · vence ${fechaCorta(todayISO(prestamoProximoVenc(p)))}
+      </div>
+      <div style="display:flex;gap:1rem;margin-top:.4rem">
+        <div><div style="font-size:.72rem;color:var(--text2)">Restante</div>
+          <div style="font-family:var(--font-head);font-weight:800;font-size:1.3rem;color:var(--danger)">${fmt(saldo)}</div></div>
+        <div><div style="font-size:.72rem;color:var(--text2)">Cuota</div>
+          <div style="font-family:var(--font-head);font-weight:800;font-size:1.3rem">${fmt(p.cuota)}</div></div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Monto del pago *</label>
+      <input class="form-input" type="text" inputmode="numeric" data-money id="pp-amount" value="${fmtInput(sugerida)}" oninput="actualizarSplitPrestamo()">
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">Puedes pagar la cuota o hacer un abono mayor (el capital no puede superar ${fmt(saldo)}).</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">De ese pago: intereses (gasto) *</label>
+        <input class="form-input" type="text" inputmode="numeric" data-money id="pp-interes" value="${fmtInput(estimarInteresCuota(p, sugerida))}" oninput="actualizarSplitPrestamo()">
+        <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">Estimado automático; ajústalo si tu extracto dice otro valor.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Abono a capital (reduce deuda)</label>
+        <input class="form-input" type="text" inputmode="numeric" id="pp-capital" value="${fmtInput(sugerida - estimarInteresCuota(p, sugerida))}" disabled style="opacity:.7">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Pagar desde *</label>
+      <select class="form-input" id="pp-from">${opts}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fecha del pago *</label>
+      <input class="form-input" type="date" id="pp-fecha" value="${todayISO()}">
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:flex-start;gap:.6rem;cursor:pointer">
+        <input type="checkbox" id="pp-descontar" checked
+               style="width:20px;height:20px;flex-shrink:0;margin-top:1px;accent-color:var(--text)">
+        <span>
+          <span style="font-weight:600;font-size:.88rem">Descontar del saldo ahora</span>
+          <span id="pp-descontar-nota" style="display:block;font-size:.75rem;color:var(--text2);margin-top:.15rem">
+            Genera el gasto con fecha de hoy.
+          </span>
+        </span>
+      </label>
+    </div>
+    <button class="btn-primary" onclick="registrarPagoPrestamo('${p.id}')">Registrar pago</button>
+  `);
+  const fechaEl = document.getElementById('pp-fecha');
+  const chkEl = document.getElementById('pp-descontar');
+  const notaEl = document.getElementById('pp-descontar-nota');
+  const sinc = () => {
+    const esPasado = fechaEl.value && fechaEl.value < todayISO();
+    chkEl.checked = !esPasado;
+    notaEl.textContent = esPasado
+      ? 'Ese dinero ya salió de tu cuenta, por eso no se descuenta de nuevo. Solo reduce la deuda.'
+      : 'Genera el gasto con fecha de hoy.';
+  };
+  fechaEl.addEventListener('change', sinc);
+  fechaEl.addEventListener('input', sinc);
+  sinc();
+}
+
+function actualizarSplitPrestamo() {
+  const mEl = document.getElementById('pp-amount');
+  const iEl = document.getElementById('pp-interes');
+  const cEl = document.getElementById('pp-capital');
+  if (!mEl || !iEl || !cEl) return;
+  const monto = parseMoney(mEl.value);
+  let interes = parseMoney(iEl.value);
+  if (interes > monto) { interes = monto; iEl.value = fmtInput(interes); }
+  cEl.value = fmtInput(Math.max(0, monto - interes));
+}
+
+let _pagoPrestamoEnCurso = false;
+async function registrarPagoPrestamo(id) {
+  if (_pagoPrestamoEnCurso) return;
+  const p = prestamos.find(x => x.id === id);
+  if (!p) return;
+  const saldo = prestamoSaldo(p);
+  const monto = moneyVal('pp-amount');
+  const interes = Math.max(0, Math.min(moneyVal('pp-interes'), monto));
+  const capital = monto - interes;
+  const from = document.getElementById('pp-from').value;
+  const fecha = document.getElementById('pp-fecha').value || todayISO();
+  const descontar = document.getElementById('pp-descontar').checked;
+  const errMonto = validarMonto(monto);
+  if (errMonto) { showToast(errMonto); return; }
+  if (capital > saldo) { showToast('⚠ El abono a capital (' + fmt(capital) + ') no puede superar el saldo restante (' + fmt(saldo) + '). Baja el monto o sube los intereses.'); return; }
+  const errFecha = validarFecha(fecha);
+  if (errFecha) { showToast(errFecha); return; }
+  const acc = endpointTxAccount(from);
+  if (!acc) { showToast('⚠ Elige de dónde sale la plata'); return; }
+  _pagoPrestamoEnCurso = true;
+  try {
+    let txId = '';
+    let metodo = 'efectivo', cuentaId = '';
+    if (acc.account === 'efectivo') { metodo = 'efectivo'; }
+    else { metodo = 'digital'; cuentaId = acc.cuentaId; }
+    if (descontar) {
+      const disp = Number(endpointBookBalance(from)) || 0;
+      if (monto > disp) { _pagoPrestamoEnCurso = false; showToast('⚠ Saldo insuficiente en ' + endpointLabel(from) + ' (' + fmt(disp) + ')'); return; }
+      const tx = {
+        id: uid(), type: 'expense', amount: monto, date: todayISO(),
+        category: 'Pago de préstamo', account: acc.account, cuentaId: acc.cuentaId,
+        notes: 'Cuota préstamo: ' + p.name + ` (capital ${fmt(capital)} + interés ${fmt(interes)})` + (fecha !== todayISO() ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
+      };
+      await saveTransaction(tx);
+      txId = tx.id;
+    }
+    const actualizado = Object.assign({}, p, {
+      pagos: (p.pagos || []).concat([{
+        fecha, monto, interes, capital, metodo, cuentaId, txId,
+        registradoEl: todayISO(), sinMovimiento: !descontar
+      }])
+    });
+    await savePrestamo(actualizado);
+    closeModal();
+    const queda = saldo - capital;
+    showToast(queda <= 0 ? '🎉 ¡Préstamo saldado!' : `✅ Cuota: capital ${fmt(capital)} + interés ${fmt(interes)} · restan ${fmt(queda)}`);
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error registrando pago de prestamo:', e);
+    showToast('❌ No se pudo registrar. Intenta de nuevo.');
+  } finally { _pagoPrestamoEnCurso = false; }
+}
+
+// Tabla de amortizacion simple: cuotas pagadas (reales) + plan restante.
+function openTablaPrestamo(id) {
+  const p = prestamos.find(x => x.id === id);
+  if (!p) return;
+  const base = parseLocalDate(p.startDate);
+  const b = isNaN(base.getTime()) ? hoyLocal() : base;
+  const pagos = p.pagos || [];
+  // Plan estimado por Saldos Insolutos: cada cuota paga primero el interes
+  // del saldo y el resto amortiza. Es estimacion (la realidad la define
+  // el split de cada pago hecho).
+  const im = prestamoTasaMensual(p);
+  let saldoSim = Number(p.initialAmount) || 0;
+  const filasPlan = [];
+  for (let i = 1; i <= Number(p.totalCuotas) || 0; i++) {
+    const f = sumarMeses(b, i - 1, prestamoDia(p));
+    const intEst = im > 0 ? Math.round(saldoSim * im) : 0;
+    const capEst = Math.max(0, Math.min((Number(p.cuota) || 0) - intEst, saldoSim));
+    saldoSim = Math.max(0, saldoSim - capEst);
+    const pagada = i <= pagos.length;
+    filasPlan.push(`
+      <div class="rule-labels" style="margin-bottom:.4rem">
+        <span>${pagada ? '✓' : i === pagos.length + 1 ? '▶' : '·'} Cuota ${i} · ${fechaCorta(todayISO(f))}${im > 0 && !pagada ? ` (int. est. ${fmt(intEst)})` : ''}</span>
+        <strong style="color:${pagada ? 'var(--ok)' : 'var(--text)'}">${fmt(p.cuota)}${pagada ? '' : ' · rest. ' + fmt(saldoSim)}</strong>
+      </div>`);
+  }
+  const filasPagos = pagos.length ? pagos.map((x, i) => `
+    <div class="recon-item">
+      <div class="ri-icon" style="background:rgba(75,218,142,.13);color:var(--ok)">✓</div>
+      <div class="ri-info">
+        <div class="ri-main">Cuota ${i + 1} · ${fechaCorta(x.fecha)}</div>
+        <div class="ri-sub">Capital ${fmt(pagoCapital(x))} + interés ${fmt(pagoInteres(x))} · ${x.metodo === 'digital' ? esc(cuentaName(x.cuentaId) || 'Digital') : 'Efectivo'}${x.sinMovimiento ? ' · sin movimiento' : ''}</div>
+      </div>
+      <div class="ri-diff">${fmt(x.monto)}</div>
+      <div class="tx-actions" style="margin-left:.25rem">
+        <button class="tx-btn del" data-unpay="${i}">🗑</button>
+      </div>
+    </div>`).join('') : '<p class="muted">Aún no hay pagos registrados.</p>';
+
+  openModal('Tabla · ' + p.name, `
+    <div class="recon-summary" style="margin-bottom:1rem">
+      <div class="recon-card"><div class="r-label">Deuda inicial</div><div class="r-val">${fmt(p.initialAmount)}</div></div>
+      <div class="recon-card"><div class="r-label">Restante (capital)</div><div class="r-val" style="color:var(--danger)">${fmt(prestamoSaldo(p))}</div></div>
+    </div>
+    <div class="recon-summary" style="margin-bottom:1rem">
+      <div class="recon-card"><div class="r-label">Capital pagado</div><div class="r-val" style="color:var(--ok)">${fmt(prestamoCapitalPagado(p))}</div></div>
+      <div class="recon-card"><div class="r-label">Intereses pagados (gasto)</div><div class="r-val">${fmt(prestamoInteresesPagados(p))}</div></div>
+    </div>
+    <div class="section-title" style="margin-bottom:.6rem">Pagos hechos</div>
+    <div style="margin-bottom:1rem">${filasPagos}</div>
+    <div class="section-title" style="margin-bottom:.6rem">Plan de cuotas</div>
+    <div>${filasPlan.join('')}</div>
+    ${p.tasa ? `<p class="muted" style="margin-top:.75rem">Tasa registrada: ${esc(String(p.tasa))}% E.A. (el plan la usa para estimar intereses por Saldos Insolutos).</p>` : '<p class="muted" style="margin-top:.75rem">Sin tasa registrada: todo pago se toma como capital.</p>'}
+  `);
+  document.querySelectorAll('#modal-content [data-unpay]').forEach(btn => {
+    btn.onclick = () => confirmRevertirPagoPrestamo(id, parseInt(btn.dataset.unpay));
+  });
+}
+
+async function confirmRevertirPagoPrestamo(id, pagoIdx) {
+  const p = prestamos.find(x => x.id === id);
+  if (!p || !p.pagos || !p.pagos[pagoIdx]) return;
+  const pago = p.pagos[pagoIdx];
+  if (!(await appConfirm(`¿Deshacer la cuota ${pagoIdx + 1} de ${fmt(pago.monto)} (capital ${fmt(pagoCapital(pago))} + interés ${fmt(pagoInteres(pago))})? Se eliminará también su movimiento y la deuda subirá de nuevo.`, 'Deshacer'))) return;
+  try {
+    if (pago.txId) await deleteTransaction(pago.txId);
+    const actualizado = Object.assign({}, p, {
+      pagos: p.pagos.filter((_, i) => i !== pagoIdx)
+    });
+    await savePrestamo(actualizado);
+    closeModal();
+    showToast('↩ Cuota deshecha');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error revirtiendo cuota:', e);
+    showToast('❌ No se pudo deshacer. Intenta de nuevo.');
+  }
+}
+
+async function confirmDeletePrestamo(id) {
+  const p = prestamos.find(x => x.id === id);
+  if (!p) return;
+  const ok = await appConfirm(
+    `¿Eliminar el préstamo "${esc(p.name)}"? El desembolso y las cuotas ya registradas son movimientos reales y <strong>se conservan</strong>; solo se borra el plan de pago.`,
+    'Eliminar');
+  if (!ok) return;
+  try {
+    await deletePrestamo(id);
+    showToast('🗑 Préstamo eliminado (movimientos conservados)');
+    renderPage(currentPage);
+  } catch (e) {
+    console.error('Error eliminando prestamo:', e);
     showToast('❌ No se pudo eliminar. Intenta de nuevo.');
   }
 }
@@ -3150,6 +3938,7 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   unlockScroll();
   editingId = null; editingFijoId = null; modalMode = null;
+  _convertirPasivoId = '';
 }
 
 /* Confirm personalizado: reemplaza window.confirm(), que puede quedar
@@ -3719,7 +4508,7 @@ async function saveTrasladoForm() {
 }
 
 function exportJSON() {
-  const data = { version: 7, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio, cuentas, traslados };
+  const data = { version: 8, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio, cuentas, traslados, prestamos };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   download(blob, 'kasa-backup-' + todayISO() + '.json');
   showToast('📦 JSON descargado');
@@ -3775,7 +4564,7 @@ async function importJSON(file) {
     const fechaOk = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : todayISO();
     const TIPOS = ['income', 'expense', 'saving'];
     const ok = await appConfirm(
-      `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos, ${(data.balances||[]).length} conciliaciones y ${(data.traslados||[]).length} traslados? Esto reemplazará los datos actuales.`,
+      `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos, ${(data.balances||[]).length} conciliaciones, ${(data.traslados||[]).length} traslados y ${(data.prestamos||[]).length} préstamos? Esto reemplazará los datos actuales.`,
       'Importar'
     );
     if (!ok) return;
@@ -3841,6 +4630,31 @@ async function importJSON(file) {
       createdAt: Number(tr.createdAt) || Date.now()
     })).filter(tr => tr.amount > 0 && tr.from !== tr.to);
     await Promise.all(traslados.map(tr => dbPut('traslados', tr)));
+    prestamos = comoArray(data.prestamos).filter(pr => pr && pr.id).map(pr => ({
+      id: txt(pr.id, 40), name: txt(pr.name, 80) || 'Préstamo',
+      entidad: txt(pr.entidad, 60), tasa: txt(pr.tasa, 10),
+      initialAmount: num(pr.initialAmount), cuota: num(pr.cuota),
+      totalCuotas: Math.min(Math.max(parseInt(pr.totalCuotas) || 12, 1), 360),
+      diaPago: Math.min(Math.max(parseInt(pr.diaPago) || 10, 1), 31),
+      startDate: fechaOk(pr.startDate), notes: txt(pr.notes, 200),
+      desembolsoEndpoint: txt(pr.desembolsoEndpoint, 60), desembolsoTxId: txt(pr.desembolsoTxId, 40),
+      createdAt: Number(pr.createdAt) || Date.now(),
+      pagos: Array.isArray(pr.pagos) ? pr.pagos.slice(0, 500).map(x => {
+        const pmonto = num(x && x.monto);
+        // Migracion: pagos viejos sin split quedan 100% como capital.
+        let pinteres = (x && x.interes !== undefined && x.interes !== null) ? num(x.interes) : 0;
+        if (pinteres > pmonto) pinteres = pmonto;
+        return {
+          fecha: fechaOk(x && x.fecha), monto: pmonto,
+          interes: pinteres, capital: Math.max(0, pmonto - pinteres),
+          metodo: (x && x.metodo) === 'digital' ? 'digital' : 'efectivo',
+          cuentaId: idsCuenta.has(x && x.cuentaId) ? x.cuentaId : '',
+          txId: txt(x && x.txId, 40), registradoEl: txt(x && x.registradoEl, 10),
+          sinMovimiento: !!(x && x.sinMovimiento)
+        };
+      }) : []
+    })).filter(pr => pr.initialAmount > 0 && pr.cuota > 0);
+    await Promise.all(prestamos.map(pr => dbPut('prestamos', pr)));
     showToast('📂 Datos importados exitosamente');
     renderPage(currentPage);
   } catch (e) {
@@ -3867,7 +4681,13 @@ function computeReport() {
   const gastosVariables = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   // Prorrateado: el Estado de Resultados cubre un mes, no el ano completo.
   const gastosFijos = fijosMensualRequerido();
-  const gastosTotales = gastosVariables + gastosFijos;
+  // Criterio contable: la cuota del prestamo mueve caja completa, pero al
+  // resultado solo va el INTERES; el capital amortiza el pasivo (Balance).
+  // Por eso se resta el capital pagado en el mes de los egresos.
+  const prestMes = prestamoMontosDelMes(currentMonth, currentYear);
+  const capitalPrestamos = Math.min(prestMes.capital, gastosVariables);
+  const interesesPrestamos = prestMes.interes;
+  const gastosTotales = gastosVariables + gastosFijos - capitalPrestamos;
   const flujoNeto = ingresos - gastosTotales;
   const ahorroPeriodo = monthTx.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
 
@@ -3875,7 +4695,10 @@ function computeReport() {
   const pt = patrimonioTotals();
   const activosItems = patrimonio.filter(p => p.kind === 'activo').map(p => ({ name: p.name, cat: p.category, amount: p.amount }));
   if (pt.ahorros > 0) activosItems.push({ name: 'Ahorros acumulados', cat: 'Ahorros', amount: pt.ahorros });
-  const pasivosItems = patrimonio.filter(p => p.kind === 'pasivo').map(p => ({ name: p.name, cat: p.category, amount: p.amount }));
+  if (pt.autoCaja > 0) activosItems.push({ name: 'Efectivo en caja', cat: 'Automático · saldo en libros', amount: pt.autoCaja });
+  if (pt.autoDigital > 0) activosItems.push({ name: 'Cuentas digitales', cat: 'Automático · saldo en libros', amount: pt.autoDigital });
+  const pasivosItems = patrimonio.filter(p => p.kind === 'pasivo').map(p => ({ name: p.name, cat: p.category, amount: p.amount }))
+    .concat(prestamos.filter(p => prestamoSaldo(p) > 0).map(p => ({ name: '🏦 ' + p.name, cat: (p.entidad || 'Préstamo') + ' · cuota ' + (prestamoNPagadas(p) + 1) + '/' + p.totalCuotas, amount: prestamoSaldo(p) })));
 
   // ── Métricas de decisión ──
   const endeudamiento = pt.activos > 0 ? (pt.pasivos / pt.activos) * 100 : 0;
@@ -3892,6 +4715,7 @@ function computeReport() {
   return {
     periodo: MONTHS_ES[currentMonth] + ' ' + currentYear,
     ingresos, gastosVariables, gastosFijos, gastosTotales, flujoNeto, ahorroPeriodo,
+    capitalPrestamos, interesesPrestamos,
     activosItems, pasivosItems,
     totalActivos: pt.activos, totalPasivos: pt.pasivos, patrimonioNeto: pt.neto, ahorros: pt.ahorros,
     endeudamiento, capacidadAhorro, fondoEmergencia, mesesCobertura, gastoMensual, saldoDisponible,
@@ -4030,10 +4854,12 @@ function generateReportHTML() {
     <tr class="sub"><td>Egresos</td><td class="num"></td></tr>
     <tr><td>(−) Gastos fijos</td><td class="num neg">${fmt(m.gastosFijos)}</td></tr>
     <tr><td>(−) Gastos variables</td><td class="num neg">${fmt(m.gastosVariables)}</td></tr>
+    ${m.capitalPrestamos > 0 ? `<tr><td>(+) Menos: capital pagado de préstamos<span class="cat">Amortiza el pasivo (Balance), no es gasto</span></td><td class="num pos">${fmt(m.capitalPrestamos)}</td></tr>` : ''}
     <tr><td>Total egresos</td><td class="num neg">${fmt(m.gastosTotales)}</td></tr>
     <tr class="total"><td>= Flujo Neto del periodo</td><td class="num" style="color:${m.flujoNeto>=0?'#2e9e63':'#c23a3a'}">${fmt(m.flujoNeto)}</td></tr>
   </table>
-  <table style="margin-top:6px"><tr><td class="muted" style="border:none">Memo · Ahorro registrado en el periodo</td><td class="num" style="border:none;color:#3a8fff">${fmt(m.ahorroPeriodo)}</td></tr></table>
+  <table style="margin-top:6px"><tr><td class="muted" style="border:none">Memo · Ahorro registrado en el periodo</td><td class="num" style="border:none;color:#3a8fff">${fmt(m.ahorroPeriodo)}</td></tr>${m.interesesPrestamos > 0 ? `<tr><td class="muted" style="border:none">Memo · Intereses de préstamos (gasto, incluido arriba)</td><td class="num" style="border:none">${fmt(m.interesesPrestamos)}</td></tr>` : ''}</table>
+  <p class="muted" style="font-size:10.5px;margin:4px 0 0">Nota: la cuota del préstamo mueve caja completa, pero al resultado solo va el interés; el capital reduce la deuda en el Balance General.</p>
 
   <h2>2 · Balance General</h2>
   <div class="cols">
@@ -4132,6 +4958,8 @@ function exportReportCSV() {
   push('Ingresos totales', m.ingresos);
   push('Gastos fijos', m.gastosFijos);
   push('Gastos variables', m.gastosVariables);
+  push('Menos: capital pagado de prestamos (amortiza pasivo, no es gasto)', m.capitalPrestamos || 0);
+  push('Memo: intereses de prestamos incluidos en gastos variables', m.interesesPrestamos || 0);
   push('Total egresos', m.gastosTotales);
   push('Flujo Neto del periodo', m.flujoNeto);
   push('Ahorro registrado en el periodo', m.ahorroPeriodo);
@@ -4272,6 +5100,9 @@ document.getElementById('dash-traslado').addEventListener('click', () => {
 document.getElementById('add-btn-patrimonio').addEventListener('click', () => {
   openPatrimonioForm(null, 'activo');
 });
+document.getElementById('add-btn-prestamo').addEventListener('click', () => {
+  openPrestamoForm();
+});
 document.getElementById('add-btn-cuenta').addEventListener('click', () => {
   openCuentaForm();
 });
@@ -4388,6 +5219,7 @@ async function init() {
     fijos = fijos.length ? fijos : [];
     balances = balances.length ? balances : [];
     traslados = Array.isArray(traslados) ? traslados : [];
+    prestamos = Array.isArray(prestamos) ? prestamos : [];
   }
   renderDashboard();
 
