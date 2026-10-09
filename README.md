@@ -99,7 +99,7 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 1. Sube el `index.html` (u otros archivos) nuevos al repo.
 2. **Sube la versión** en `sw.js` para forzar el refresco del caché:
    ```js
-   const CACHE_VERSION = 'kasa-v1.9.0'; // ← incrementa este número
+   const CACHE_VERSION = 'kasa-v2.0.0'; // ← incrementa este número
    ```
 3. Al abrir la app instalada aparecerá el aviso **"Nueva versión
    disponible · Actualizar"**. Un toque y se recarga sola: ya no hace
@@ -140,8 +140,6 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 
 ## v2 · Conciliación que sí suma + Traslados internos
 
-Esta carpeta es la versión corregida; la raíz (`D:\Kasa\index.html`) queda como original.
-
 - **La conciliación ahora sí suma al total**: Total en Efectivo y Total en Digital
   son saldos en libros (movimientos ± conciliaciones ± traslados). Antes la
   diferencia solo se veía en el historial.
@@ -165,3 +163,47 @@ Esta carpeta es la versión corregida; la raíz (`D:\Kasa\index.html`) queda com
 - **Auto-cálculo**: si el banco da la cuota se despeja la tasa sola (y viceversa, o el plazo); solo se llena el campo vacío.
 - **Criterio contable**: efectivo y digital en libros entran automáticos a Activos (con aviso anti-duplicado); en el ERI solo el interés es gasto, el capital amortiza el pasivo (fila de ajuste visible en PDF/CSV).
 - Datos: almacén `prestamos` (IndexedDB v6), JSON versión 8. Pagos antiguos migran como 100% capital (sin cambios de saldo).
+
+---
+
+## v4 · Tarjetas de crédito, paleta Esmeralda, presupuestos y metas
+
+**💵💳 Cuentas débito y crédito**
+- Cada cuenta tiene modalidad: **débito** (plata tuya) o **crédito** (plata
+  prestada). Las cuentas viejas quedan "sin modalidad" para asignarlas con un toque.
+- **Crédito es deuda**: las compras la suben, los pagos la bajan y resta del total
+  digital (no se duplica en Patrimonio). Muestra cuánto debes, el cupo disponible
+  con barra de uso (verde < 30 %, amarillo, rojo ≥ 80 %) y las cuotas por facturar.
+- **Ciclo de facturación real**: cada compra entra al extracto de su corte y se paga
+  el día de pago siguiente. La tarjeta muestra cuánto pagar y hasta cuándo, lo que va
+  del corte en curso y cuándo se paga. Cada compra en Movimientos dice "se paga el…".
+- **🌟 Días oro**: los días después del corte, cuando una compra tiene el mayor plazo
+  para pagar. Kasa avisa "¡Estás en días oro!" en el Dashboard, en Cuentas y al
+  registrar una compra. La ventana (1 a 15 días, 5 por defecto) se ajusta por tarjeta.
+- **💰 Pagar tarjeta**: desde efectivo o una cuenta débito, con el pago del extracto
+  sugerido. No cuenta como gasto (las compras ya se registraron) y libera cupo.
+
+**🛡 Sentido común financiero**
+- El efectivo y las cuentas débito no pueden quedar en negativo: Kasa bloquea el
+  gasto, ahorro, pago o eliminación que lo provocaría y avisa "saldo insuficiente".
+- Las tarjetas no pueden pasar de su cupo. Un préstamo solo se desembolsa a efectivo
+  o débito, y sus cuotas se pagan desde ahí.
+- Si ya hay un saldo negativo, el Dashboard lo señala para conciliarlo.
+
+**🎯 Presupuestos, metas y próximos pagos**
+- **Presupuestos por categoría** (Insights): tope mensual con barra de avance,
+  aviso al 80 % y al pasarte, y sugerencia según tu promedio de 3 meses.
+- **Metas de ahorro** (Ahorros): objetivo, fecha límite opcional, avance, cuánto
+  apartar al mes y botón "Aportar".
+- **Próximos pagos** (Dashboard): gastos fijos, cuotas de préstamos y extractos de
+  tarjeta que vencen en 7 días o ya vencieron.
+
+**🎨 Diseño y rendimiento**
+- Paleta **Esmeralda** en claro y oscuro (iconos incluidos), con más contraste en
+  modo claro. El tema sigue al del celular hasta que eliges uno.
+- Montos que no se cortan en pantallas angostas, zoom con dos dedos, icono correcto
+  en iPhone y lista de movimientos por bloques para que no se ponga lenta.
+- **Respaldo**: importar un JSON ahora sí reemplaza los datos. Si Kasa está abierta
+  en otra pestaña durante una actualización, avisa que la cierres.
+- Datos: IndexedDB v7 y JSON versión 9 (presupuestos y metas). La migración desde
+  v6 conserva todo, pero **exporta un respaldo antes de actualizar**.

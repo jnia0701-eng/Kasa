@@ -2,52 +2,77 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="theme-color" content="#0f1117">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#ecf2ee" id="meta-theme-color">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Kasa · Finanzas Personales</title>
 <link rel="manifest" href="./manifest.json">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%230f1117'/><text x='96' y='130' font-size='100' text-anchor='middle' fill='%23c8f560'>K</text></svg>">
+<!-- iOS no usa SVG como icono de inicio: necesita PNG -->
+<link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 /* ── TOKENS ───────────────────────────────────────────── */
+/* Paleta Esmeralda. Los tintes (fondos suaves de badges, alertas, iconos)
+   se derivan con color-mix de estos tokens: cambiar un color aquí lo
+   cambia en toda la app. --on-accent = texto sobre el acento;
+   --*-text = versión legible del color como texto sobre fondo claro. */
 :root {
-  --bg: #f7f5f0;
-  --bg2: #edeae3;
-  --bg3: #e2dfd7;
+  --bg: #ecf2ee;
+  --bg2: #e1e9e4;
+  --bg3: #c9d7cf;
   --card: #ffffff;
-  --text: #111010;
-  --text2: #5a5851;
-  --text3: #9a9690;
-  --accent: #c8f560;
-  --accent2: #a8e040;
-  --danger: #ff4b4b;
-  --warn: #ffb347;
-  --ok: #4bda8e;
-  --blue: #3a8fff;
-  --border: rgba(0,0,0,0.08);
-  --border2: rgba(0,0,0,0.14);
+  --text: #0e1a15;
+  --text2: #44564e;
+  --text3: #6c7f76;
+  --accent: #10b981;
+  --accent2: #059669;
+  --on-accent: #03271c;
+  --accent-text: #047857;
+  --danger: #e5484d;
+  --danger-text: #c0262d;
+  --warn: #f59e0b;
+  --warn-text: #a15c07;
+  --ok: #16a34a;
+  --blue: #2f7bf5;
+  --purple: #7c5cf0;
+  --hero-bg: #0b3b2e;
+  --hero-text: #e8f5ef;
+  --border: rgba(14,26,21,0.14);
+  --border2: rgba(14,26,21,0.24);
   --r: 14px;
   --r2: 20px;
-  --shadow: 0 2px 16px rgba(0,0,0,0.07);
+  --shadow: 0 2px 16px rgba(11,59,46,0.08);
+  --shadow-sm: 0 1px 2px rgba(11,59,46,0.06), 0 2px 8px rgba(11,59,46,0.05);
   --font-head: 'Syne', sans-serif;
   --font-body: 'DM Sans', sans-serif;
   --nav-h: 68px;
   --sidebar-w: 240px;
 }
 [data-theme="dark"] {
-  --bg: #0f1117;
-  --bg2: #181b23;
-  --bg3: #21252f;
-  --card: #1e2230;
-  --text: #f0ede6;
-  --text2: #9fa3b0;
-  --text3: #5a5e6a;
+  --bg: #0a1410;
+  --bg2: #101d18;
+  --bg3: #1a2c24;
+  --card: #13241d;
+  --text: #e8f5ef;
+  --text2: #9db3a8;
+  --text3: #5f756a;
+  --accent: #34d399;
+  --accent2: #10b981;
+  --accent-text: #34d399;
+  --danger: #ff6b6b;
+  --danger-text: #ff8a8a;
+  --warn: #fbbf24;
+  --warn-text: #fbbf24;
+  --ok: #4ade80;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+  --hero-bg: #0f3d2f;
   --border: rgba(255,255,255,0.07);
   --border2: rgba(255,255,255,0.13);
   --shadow: 0 2px 20px rgba(0,0,0,0.4);
+  --shadow-sm: none;
 }
 
 /* ── RESET ────────────────────────────────────────────── */
@@ -81,7 +106,7 @@ a{text-decoration:none;color:inherit}
   width:10px;height:10px;border-radius:50%;
   background:var(--accent);display:inline-block;
 }
-#sidebar nav{flex:1;overflow-y:auto;padding:.5rem .8rem}
+#sidebar nav{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:.5rem .8rem}
 .nav-item{
   display:flex;align-items:center;gap:.75rem;
   padding:.7rem .8rem;border-radius:10px;
@@ -90,7 +115,7 @@ a{text-decoration:none;color:inherit}
   border:1px solid transparent;
 }
 .nav-item:hover{background:var(--bg);color:var(--text)}
-.nav-item.active{background:var(--accent);color:#111;border-color:transparent}
+.nav-item.active{background:var(--accent);color:var(--on-accent);border-color:transparent}
 .nav-item .icon{font-size:1.2rem;width:22px;text-align:center}
 #sidebar-footer{padding:.5rem 1rem}
 .theme-btn{
@@ -130,7 +155,7 @@ a{text-decoration:none;color:inherit}
 .bnav-item .icon{font-size:1.4rem;line-height:1}
 .bnav-item.active .icon-wrap{
   background:var(--accent);border-radius:12px;
-  padding:4px 14px;color:#111;
+  padding:4px 14px;color:var(--on-accent);
 }
 
 /* FAB */
@@ -139,7 +164,7 @@ a{text-decoration:none;color:inherit}
   right:1.25rem;
   bottom:calc(var(--nav-h) + .9rem);
   width:56px;height:56px;border-radius:50%;
-  background:var(--text);color:var(--bg);
+  background:var(--accent);color:var(--on-accent);
   font-size:1.8rem;line-height:1;
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 4px 20px rgba(0,0,0,0.25);
@@ -165,7 +190,7 @@ a{text-decoration:none;color:inherit}
 
 /* Balance hero */
 #balance-hero{
-  background:var(--text);color:var(--bg);
+  background:var(--hero-bg);color:var(--hero-text);
   border-radius:var(--r2);padding:1.5rem;
   margin-bottom:1rem;position:relative;overflow:hidden;
 }
@@ -203,9 +228,9 @@ a{text-decoration:none;color:inherit}
   border-radius:var(--r);padding:1rem;margin-bottom:1rem;
   border:1px solid var(--border);
 }
-.semaforo.green{background:rgba(75,218,142,.12);border-color:rgba(75,218,142,.3)}
-.semaforo.yellow{background:rgba(255,179,71,.12);border-color:rgba(255,179,71,.3)}
-.semaforo.red{background:rgba(255,75,75,.12);border-color:rgba(255,75,75,.3)}
+.semaforo.green{background:color-mix(in srgb,var(--ok) 12%,transparent);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
+.semaforo.yellow{background:color-mix(in srgb,var(--warn) 12%,transparent);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+.semaforo.red{background:color-mix(in srgb,var(--danger) 12%,transparent);border-color:color-mix(in srgb,var(--danger) 30%,transparent)}
 .semaforo .sem-head{display:flex;align-items:center;gap:.5rem;font-weight:600;font-size:.9rem;margin-bottom:.3rem}
 .semaforo .sem-dot{width:10px;height:10px;border-radius:50%}
 .semaforo.green .sem-dot{background:var(--ok)}
@@ -214,6 +239,8 @@ a{text-decoration:none;color:inherit}
 
 /* Progress bar */
 .prog-bar{height:8px;background:var(--bg3);border-radius:999px;overflow:hidden;margin:.5rem 0}
+/* En modo claro las tarjetas blancas se confundían con el fondo. */
+.stat-card,.tx-item,.fijo-item,.insight-card,.ahorro-card,.filter-chip,.month-nav .m-btn{box-shadow:var(--shadow-sm)}
 .prog-fill{height:100%;border-radius:999px;transition:width .5s ease}
 .prog-fill.green{background:var(--ok)}
 .prog-fill.yellow{background:var(--warn)}
@@ -234,9 +261,9 @@ a{text-decoration:none;color:inherit}
   display:flex;align-items:center;justify-content:center;
   font-size:1.1rem;flex-shrink:0;
 }
-.tx-icon.income{background:rgba(75,218,142,.15);color:var(--ok)}
-.tx-icon.expense{background:rgba(255,75,75,.13);color:var(--danger)}
-.tx-icon.saving{background:rgba(58,143,255,.15);color:var(--blue)}
+.tx-icon.income{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.tx-icon.expense{background:color-mix(in srgb,var(--danger) 13%,transparent);color:var(--danger)}
+.tx-icon.saving{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
 .tx-info{flex:1;min-width:0}
 .tx-info .tx-cat{font-weight:500;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tx-info .tx-sub{font-size:.76rem;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -252,7 +279,7 @@ a{text-decoration:none;color:inherit}
   color:var(--text2);
 }
 .tx-btn:hover{background:var(--bg2);border-color:var(--border2)}
-.tx-btn.del:hover{background:rgba(255,75,75,.1);color:var(--danger);border-color:rgba(255,75,75,.3)}
+.tx-btn.del:hover{background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,transparent)}
 
 /* Fixed expenses */
 .fijo-item{
@@ -285,14 +312,11 @@ a{text-decoration:none;color:inherit}
   display:inline-flex;align-items:center;
   padding:2px 8px;border-radius:99px;font-size:.72rem;font-weight:500;
 }
-.badge.efectivo{background:rgba(58,143,255,.15);color:var(--blue)}
-.badge.transfer{background:rgba(200,245,96,.2);color:#5a7a10}
-[data-theme="dark"] .badge.transfer{color:var(--accent)}
-.badge.paid{background:rgba(75,218,142,.15);color:var(--ok)}
-.badge.unpaid{background:rgba(255,179,71,.15);color:#b07020}
-.badge.overdue{background:rgba(255,75,75,.15);color:#c23a3a;font-weight:600}
-[data-theme="dark"] .badge.overdue{color:#ff7a7a}
-[data-theme="dark"] .badge.unpaid{color:var(--warn)}
+.badge.efectivo{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
+.badge.transfer{background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent-text)}
+.badge.paid{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.badge.unpaid{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn-text)}
+.badge.overdue{background:color-mix(in srgb,var(--danger) 15%,transparent);color:var(--danger-text);font-weight:600}
 
 /* Filters */
 .filter-bar{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.5rem;margin-bottom:1rem;scrollbar-width:none}
@@ -340,11 +364,29 @@ a{text-decoration:none;color:inherit}
 
 /* Ant alert */
 .ant-alert{
-  background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.3);
+  background:color-mix(in srgb,var(--warn) 10%,transparent);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);
   border-radius:var(--r);padding:.85rem;
   display:flex;gap:.75rem;align-items:flex-start;
 }
 .ant-alert .ant-icon{font-size:1.3rem;flex-shrink:0;margin-top:1px}
+
+/* Próximos pagos (Dashboard) */
+.pp-row{display:flex;align-items:center;gap:.65rem;padding:.55rem 0;border-top:1px solid var(--border);cursor:pointer}
+.pp-row:first-child{border-top:none;padding-top:0}
+.pp-row:hover .pp-ico{background:var(--bg3)}
+.pp-ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--bg2);flex-shrink:0;font-size:1rem}
+.pp-row.vencido .pp-dias{color:var(--danger-text);font-weight:600}
+/* Ciclo de la tarjeta de crédito */
+.tc-ciclo{margin-top:.5rem;display:flex;flex-direction:column;gap:.3rem}
+.tc-linea{display:flex;gap:.4rem;font-size:.76rem;color:var(--text2);line-height:1.35}
+.tc-linea strong{color:var(--text)}
+.tc-linea.vencido,.tc-linea.vencido strong{color:var(--danger-text)}
+.tc-linea.oro{background:color-mix(in srgb,var(--warn) 12%,transparent);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:8px;padding:.35rem .5rem;color:var(--text)}
+.tc-linea.oro.activo{background:color-mix(in srgb,var(--warn) 22%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent);font-weight:500}
+.dash-oro{background:color-mix(in srgb,var(--warn) 14%,var(--card));border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.tc-guia{font-size:.76rem;color:var(--text2);margin-top:.5rem;line-height:1.45;background:var(--bg2);border-radius:8px;padding:.45rem .6rem}
+.tc-guia:empty{display:none}
+.alerta-negativo{background:color-mix(in srgb,var(--danger) 10%,transparent);border-color:color-mix(in srgb,var(--danger) 30%,transparent)}
 
 /* ── MODAL ────────────────────────────────────────────── */
 #modal-overlay{
@@ -408,8 +450,8 @@ body.modal-open{overflow:hidden}
   border:2px solid var(--border);color:var(--text2);
   transition:all .15s;text-align:center;
 }
-.type-btn.income.active{border-color:var(--ok);background:rgba(75,218,142,.12);color:var(--ok)}
-.type-btn.expense.active{border-color:var(--danger);background:rgba(255,75,75,.1);color:var(--danger)}
+.type-btn.income.active{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)}
+.type-btn.expense.active{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger)}
 
 /* Quick type selector (FAB modal) */
 .quick-types{display:flex;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem}
@@ -421,15 +463,15 @@ body.modal-open{overflow:hidden}
 .quick-type-btn:hover{border-color:var(--border2);transform:scale(1.02)}
 .quick-type-btn .qt-icon{font-size:1.8rem;margin-bottom:.4rem}
 .quick-type-btn .qt-label{font-weight:600;font-size:.85rem;color:var(--text2)}
-.quick-type-btn.selected-income{border-color:var(--ok);background:rgba(75,218,142,.1)}
+.quick-type-btn.selected-income{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,transparent)}
 .quick-type-btn.selected-income .qt-label{color:var(--ok)}
-.quick-type-btn.selected-expense{border-color:var(--danger);background:rgba(255,75,75,.08)}
+.quick-type-btn.selected-expense{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,transparent)}
 .quick-type-btn.selected-expense .qt-label{color:var(--danger)}
-.quick-type-btn.selected-fijo{border-color:var(--blue);background:rgba(58,143,255,.08)}
+.quick-type-btn.selected-fijo{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 8%,transparent)}
 .quick-type-btn.selected-fijo .qt-label{color:var(--blue)}
-.quick-type-btn.selected-saving{border-color:#8a5cf6;background:rgba(138,92,246,.08)}
-.quick-type-btn.selected-saving .qt-label{color:#8a5cf6}
-.type-btn.saving.active{border-color:#8a5cf6;background:rgba(138,92,246,.1);color:#8a5cf6}
+.quick-type-btn.selected-saving{border-color:var(--purple);background:color-mix(in srgb,var(--purple) 8%,transparent)}
+.quick-type-btn.selected-saving .qt-label{color:var(--purple)}
+.type-btn.saving.active{border-color:var(--purple);background:color-mix(in srgb,var(--purple) 10%,transparent);color:var(--purple)}
 
 /* Empty state */
 .empty{
@@ -468,9 +510,33 @@ body.modal-open{overflow:hidden}
   #main{margin-left:0;padding-bottom:calc(var(--nav-h) + 1rem)}
   #bottom-nav{display:flex}
   .page{padding:1rem}
-  #balance-hero .amount{font-size:2rem}
+  #balance-hero .amount{font-size:clamp(1.5rem,8vw,2rem);white-space:nowrap}
   .form-row{grid-template-columns:1fr}
-  #sidebar-overlay{display:none;position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.4)}
+  #sidebar-overlay{display:none;position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.4);touch-action:none}
+  /* En pantallas angostas el tercer dato del hero quedaba cortado y
+     "Exportar" no cabía en la barra inferior. */
+  /* Montos: se achica la letra pero nunca se parte un número. */
+  .balance-split{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+  .split-item{min-width:0;padding:.6rem .7rem}
+  .split-item:last-child{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between}
+  .split-item .s-val{font-size:clamp(.9rem,4.4vw,1.15rem);white-space:nowrap}
+  .stat-card{min-width:0;padding:.8rem .75rem}
+  .stat-card .s-val{font-size:clamp(.95rem,4.6vw,1.35rem);white-space:nowrap}
+  .bnav-item{min-width:0;padding:.5rem .15rem}
+  .bnav-item span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.64rem}
+  .bnav-item.active .icon-wrap{padding:4px 10px}
+  /* Cuentas: los 5 botones en la misma fila apretaban el texto y
+     ensanchaban la página; en celular pasan a su propia línea. */
+  #cuentas-list .fijo-item{flex-wrap:wrap}
+  #cuentas-list .fijo-info{flex:1 1 55%;min-width:0}
+  #cuentas-list .tx-actions{flex-basis:100%;justify-content:flex-end;margin-left:0 !important;
+    margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border)}
+  #cuentas-list .tx-btn{width:36px;height:36px;font-size:1rem}
+  .ahorro-card{min-width:0;padding:.85rem .6rem}
+  .ahorro-card .a-val{font-size:clamp(.95rem,4.6vw,1.4rem);white-space:nowrap}
+  /* 16px evita que iOS haga zoom al enfocar un campo (ya se permite
+     el zoom con dos dedos: se quitó maximum-scale del viewport). */
+  .form-input{font-size:16px}
   #sidebar-overlay.open{display:block}
 }
 @media(min-width:769px){
@@ -508,14 +574,14 @@ body.modal-open{overflow:hidden}
 /* Meta / goal card (gastos fijos diarios & ahorro) */
 .goal-card{
   border-radius:var(--r2);padding:1.1rem 1.25rem;margin-bottom:1rem;
-  background:linear-gradient(135deg, rgba(58,143,255,.12), rgba(138,92,246,.1));
-  border:1px solid rgba(58,143,255,.25);
+  background:linear-gradient(135deg, color-mix(in srgb,var(--blue) 12%,transparent), color-mix(in srgb,var(--purple) 10%,transparent));
+  border:1px solid color-mix(in srgb,var(--blue) 25%,transparent);
 }
 .goal-card .g-label{font-size:.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.15rem}
 .goal-card .g-amount{font-family:var(--font-head);font-size:1.9rem;font-weight:800;color:var(--blue);line-height:1.1}
 .goal-card .g-sub{font-size:.78rem;color:var(--text2);margin-top:.35rem}
-.goal-card.purple{background:linear-gradient(135deg, rgba(138,92,246,.12), rgba(200,245,96,.1));border-color:rgba(138,92,246,.25)}
-.goal-card.purple .g-amount{color:#8a5cf6}
+.goal-card.purple{background:linear-gradient(135deg, color-mix(in srgb,var(--purple) 12%,transparent), color-mix(in srgb,var(--accent) 10%,transparent));border-color:color-mix(in srgb,var(--purple) 25%,transparent)}
+.goal-card.purple .g-amount{color:var(--purple)}
 
 /* Ahorros summary cards */
 .ahorro-summary{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem}
@@ -524,7 +590,7 @@ body.modal-open{overflow:hidden}
   padding:1rem;text-align:center;
 }
 .ahorro-card .a-label{font-size:.75rem;color:var(--text2);margin-bottom:.3rem}
-.ahorro-card .a-val{font-family:var(--font-head);font-size:1.4rem;font-weight:700;color:#8a5cf6}
+.ahorro-card .a-val{font-family:var(--font-head);font-size:1.4rem;font-weight:700;color:var(--purple)}
 
 /* Conciliación */
 .stat-card.clickable{cursor:pointer;transition:all .15s}
@@ -549,9 +615,9 @@ body.modal-open{overflow:hidden}
 }
 .recon-diff-preview .rd-label{font-size:.72rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.2rem}
 .recon-diff-preview .rd-val{font-family:var(--font-head);font-size:1.6rem;font-weight:800}
-.recon-diff-preview.pos{background:rgba(75,218,142,.12);border-color:rgba(75,218,142,.3)}
+.recon-diff-preview.pos{background:color-mix(in srgb,var(--ok) 12%,transparent);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
 .recon-diff-preview.pos .rd-val{color:var(--ok)}
-.recon-diff-preview.neg{background:rgba(255,75,75,.1);border-color:rgba(255,75,75,.3)}
+.recon-diff-preview.neg{background:color-mix(in srgb,var(--danger) 10%,transparent);border-color:color-mix(in srgb,var(--danger) 30%,transparent)}
 .recon-diff-preview.neg .rd-val{color:var(--danger)}
 .recon-item{
   display:flex;align-items:center;gap:.85rem;padding:.85rem 1rem;
@@ -559,7 +625,7 @@ body.modal-open{overflow:hidden}
 }
 .recon-item .ri-icon{
   width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;
-  font-size:1.1rem;flex-shrink:0;background:rgba(58,143,255,.13);color:var(--blue);
+  font-size:1.1rem;flex-shrink:0;background:color-mix(in srgb,var(--blue) 13%,transparent);color:var(--blue);
 }
 .recon-item .ri-info{flex:1;min-width:0}
 .recon-item .ri-main{font-weight:500;font-size:.9rem}
@@ -655,6 +721,9 @@ body.modal-open{overflow:hidden}
       <div class="muted" style="font-size:.72rem;opacity:.6;margin-top:.6rem" id="hero-adjust-note"></div>
     </div>
 
+    <!-- Aviso: efectivo o débito en negativo (no debería pasar) -->
+    <div id="dash-negativos"></div>
+
     <!-- Efectivo vs Digital -->
     <div class="stat-grid" style="margin-bottom:1rem">
       <div class="stat-card clickable" id="card-cash" onclick="openReconciliationModal('efectivo')" title="Toca para conciliar tu saldo real en efectivo">
@@ -679,6 +748,30 @@ body.modal-open{overflow:hidden}
         <span style="font-size:.78rem;color:var(--text2);cursor:pointer" onclick="goToPage('cuentas')">Gestionar →</span>
       </div>
       <div id="dash-cuentas-list"></div>
+    </div>
+
+    <!-- Próximos pagos: tarjetas, cuotas de préstamos y gastos fijos (7 días) -->
+    <div class="card card-sm" id="dash-pagos-card" style="display:none;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+        <div style="font-weight:600;font-size:.85rem">📅 Próximos pagos · 7 días</div>
+        <span style="font-size:.78rem;color:var(--text2)" id="dash-pagos-total"></span>
+      </div>
+      <div id="dash-pagos-list"></div>
+    </div>
+
+    <!-- Tarjetas de crédito que hoy están en días oro -->
+    <div class="card card-sm dash-oro" id="dash-oro-card" style="display:none;margin-bottom:1rem">
+      <div style="font-weight:600;font-size:.85rem;margin-bottom:.4rem">🌟 ¡Estás en días oro!</div>
+      <div id="dash-oro-list"></div>
+    </div>
+
+    <!-- Presupuestos que llegaron al 80 % o lo superaron -->
+    <div class="card card-sm" id="dash-presup-card" style="display:none;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+        <div style="font-weight:600;font-size:.85rem">🎯 Presupuestos en alerta</div>
+        <span style="font-size:.78rem;color:var(--text2);cursor:pointer" onclick="goToPage('insights')">Ver todos →</span>
+      </div>
+      <div id="dash-presup-list"></div>
     </div>
 
     <!-- Meta diaria de gastos fijos (suma de todos los gastos fijos) -->
@@ -779,7 +872,7 @@ body.modal-open{overflow:hidden}
       <div class="g-sub" id="fijos-mensual-sub">Suma de tus gastos fijos mensuales</div>
     </div>
 
-    <div class="fijos-summary" style="background:rgba(255,179,71,.1);border:1px solid rgba(255,179,71,.25)">
+    <div class="fijos-summary" style="background:color-mix(in srgb,var(--warn) 10%,transparent);border:1px solid color-mix(in srgb,var(--warn) 25%,transparent)">
       <div>
         <div style="font-size:.75rem;color:var(--text2)">⏳ Pendiente por pagar</div>
         <div class="fs-val" id="fijos-pendiente-val">$0</div>
@@ -812,6 +905,13 @@ body.modal-open{overflow:hidden}
       </div>
     </div>
 
+    <!-- Metas de ahorro: los aportes son ahorros asignados a la meta -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <div class="section-title" style="margin:0">🎯 Metas de ahorro</div>
+      <button class="icon-btn" id="add-btn-meta" title="Nueva meta" aria-label="Nueva meta de ahorro">＋</button>
+    </div>
+    <div id="metas-list" style="margin-bottom:1.25rem"></div>
+
     <div class="section-title" style="margin-bottom:.75rem">Movimientos de ahorro</div>
     <div id="ahorros-list" class="tx-list"></div>
   </section>
@@ -834,6 +934,12 @@ body.modal-open{overflow:hidden}
     </div>
 
     <div class="section-title" style="margin-bottom:.75rem">Mis cuentas</div>
+    <div class="filter-bar" id="cuentas-filter-bar">
+      <div class="filter-chip active" data-cf="todas">Todas</div>
+      <div class="filter-chip" data-cf="debito">💵 Débito</div>
+      <div class="filter-chip" data-cf="credito">💳 Crédito</div>
+      <div class="filter-chip" data-cf="sin">❓ Sin modalidad</div>
+    </div>
     <div id="cuentas-list"></div>
 
     <div id="cuentas-unassigned" style="margin-top:1rem"></div>
@@ -860,7 +966,7 @@ body.modal-open{overflow:hidden}
         <div class="a-val" style="color:var(--danger)" id="pat-pasivos-val">$0</div>
       </div>
     </div>
-    <div class="goal-card" style="background:linear-gradient(135deg,rgba(75,218,142,.12),rgba(58,143,255,.1));border-color:rgba(75,218,142,.25)">
+    <div class="goal-card" style="background:linear-gradient(135deg,color-mix(in srgb,var(--ok) 12%,transparent),color-mix(in srgb,var(--blue) 10%,transparent));border-color:color-mix(in srgb,var(--ok) 25%,transparent)">
       <div class="g-label">⚖️ Patrimonio Neto</div>
       <div class="g-amount" style="color:var(--ok)" id="pat-neto-val">$0</div>
       <div class="g-sub" id="pat-neto-sub">Activos − Pasivos. Incluye tus ahorros acumulados automáticamente.</div>
@@ -879,7 +985,7 @@ body.modal-open{overflow:hidden}
       <div class="section-title" style="margin:0">🏦 Préstamos (con amortización)</div>
       <button class="icon-btn" id="add-btn-prestamo" title="Nuevo préstamo">＋</button>
     </div>
-    <div class="goal-card" id="prestamos-total-card" style="display:none;background:linear-gradient(135deg,rgba(255,75,75,.1),rgba(255,179,71,.1));border-color:rgba(255,75,75,.25)">
+    <div class="goal-card" id="prestamos-total-card" style="display:none;background:linear-gradient(135deg,color-mix(in srgb,var(--danger) 10%,transparent),color-mix(in srgb,var(--warn) 10%,transparent));border-color:color-mix(in srgb,var(--danger) 25%,transparent)">
       <div class="g-label">🔴 Total adeudado en préstamos</div>
       <div class="g-amount" style="color:var(--danger)" id="prestamos-total-val">$0</div>
       <div class="g-sub" id="prestamos-total-sub"></div>
@@ -937,12 +1043,22 @@ body.modal-open{overflow:hidden}
         <button class="icon-btn hamburger" id="hamburger4">☰</button>
         <h1>Insights</h1>
       </div>
+      <button class="icon-btn" id="add-btn-presupuesto" title="Nuevo presupuesto" aria-label="Nuevo presupuesto">＋</button>
+    </div>
+
+    <!-- Presupuestos por categoría (mes seleccionado en el Dashboard) -->
+    <div class="insight-card">
+      <div class="i-head">
+        <div class="i-icon" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent-text)">🎯</div>
+        <span style="flex:1">Presupuestos · <span id="presup-mes">—</span></span>
+      </div>
+      <div id="presup-list"></div>
     </div>
 
     <!-- Regla 50/30/20 -->
     <div class="insight-card">
       <div class="i-head">
-        <div class="i-icon" style="background:rgba(58,143,255,.12);color:var(--blue)">📊</div>
+        <div class="i-icon" style="background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue)">📊</div>
         Regla 50/30/20
       </div>
       <div id="rule-5030" class="rule-row">
@@ -965,7 +1081,7 @@ body.modal-open{overflow:hidden}
     <!-- Alerta hormiga -->
     <div class="insight-card" id="ant-card" style="display:none">
       <div class="i-head">
-        <div class="i-icon" style="background:rgba(255,179,71,.13);color:var(--warn)">🐜</div>
+        <div class="i-icon" style="background:color-mix(in srgb,var(--warn) 13%,transparent);color:var(--warn)">🐜</div>
         Gastos Hormiga Detectados
       </div>
       <div id="ant-list"></div>
@@ -974,7 +1090,7 @@ body.modal-open{overflow:hidden}
     <!-- Categorías top -->
     <div class="insight-card">
       <div class="i-head">
-        <div class="i-icon" style="background:rgba(75,218,142,.12);color:var(--ok)">🔍</div>
+        <div class="i-icon" style="background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)">🔍</div>
         Top Categorías de Gasto (mes actual)
       </div>
       <div id="cat-breakdown"></div>
@@ -983,7 +1099,7 @@ body.modal-open{overflow:hidden}
     <!-- Conciliación resumen -->
     <div class="insight-card" id="insight-recon-card" style="display:none">
       <div class="i-head">
-        <div class="i-icon" style="background:rgba(58,143,255,.12);color:var(--blue)">🧮</div>
+        <div class="i-icon" style="background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue)">🧮</div>
         Conciliación de Saldos
       </div>
       <div id="insight-recon-body"></div>
@@ -1096,7 +1212,7 @@ body.modal-open{overflow:hidden}
    STORAGE — IndexedDB with LocalStorage fallback
 ───────────────────────────────────────────────────────── */
 const DB_NAME = 'kasa_db';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 let db = null;
 
 async function initDB() {
@@ -1106,7 +1222,23 @@ async function initDB() {
       try {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onerror = () => reject(req.error || new Error('Error abriendo IndexedDB'));
-        req.onsuccess = () => { db = req.result; resolve(db); };
+        // Subir de versión necesita que ninguna otra pestaña tenga la base
+        // abierta. Antes la app se quedaba esperando sin avisar; la carga
+        // sigue sola apenas se cierre la otra pestaña.
+        req.onblocked = () => {
+          try { showToast('⏳ Cierra las otras pestañas o ventanas de Kasa para terminar de actualizar'); } catch (e) {}
+        };
+        req.onsuccess = () => {
+          db = req.result;
+          // Si una versión más nueva se abre en otra pestaña, esta suelta
+          // la base para no bloquearla y pide recargar.
+          db.onversionchange = () => {
+            db.close();
+            db = null;
+            try { showToast('✨ Kasa se actualizó en otra pestaña. Recarga esta.'); } catch (e) {}
+          };
+          resolve(db);
+        };
         req.onupgradeneeded = e => {
           const d = e.target.result;
           if (!d.objectStoreNames.contains('transactions'))
@@ -1123,6 +1255,10 @@ async function initDB() {
             d.createObjectStore('traslados', { keyPath: 'id' });
           if (!d.objectStoreNames.contains('prestamos'))
             d.createObjectStore('prestamos', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('presupuestos'))
+            d.createObjectStore('presupuestos', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('metas'))
+            d.createObjectStore('metas', { keyPath: 'id' });
         };
       } catch (innerErr) { reject(innerErr); }
     });
@@ -1136,7 +1272,7 @@ async function initDB() {
 /* Respaldo en memoria: si IndexedDB Y localStorage fallan (por ejemplo dentro
    de una vista previa en sandbox o un WebView restringido), la app sigue
    funcionando durante la sesión en lugar de que los botones "no hagan nada". */
-const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [], cuentas: [], traslados: [], prestamos: [] };
+const memoryFallback = { transactions: [], fijos: [], balances: [], patrimonio: [], cuentas: [], traslados: [], prestamos: [], presupuestos: [], metas: [] };
 
 function safeLSGet(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -1222,6 +1358,20 @@ function dbDelete(store, id) {
   });
 }
 
+// Vacía un almacén completo (usado al importar un respaldo).
+function dbClear(store) {
+  return new Promise((resolve) => {
+    memoryFallback[store] = [];
+    if (!db) { safeLSSet(store, '[]'); resolve(true); return; }
+    try {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).clear();
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    } catch (e) { resolve(false); }
+  });
+}
+
 /* ─────────────────────────────────────────────────────────
    DATA LAYER
 ───────────────────────────────────────────────────────── */
@@ -1232,6 +1382,8 @@ let patrimonio = [];
 let cuentas = [];   // Cuentas digitales (desglose del saldo "transfer")
 let traslados = []; // Traspasos internos entre Efectivo y cuentas digitales (no son ingreso ni gasto)
 let prestamos = []; // Prestamos con amortizacion: deuda viva que se paga por cuotas
+let presupuestos = []; // Tope mensual de gasto por categoría { id, category, monto }
+let metas = [];        // Metas de ahorro { id, name, objetivo, fecha }; los aportes son ahorros con metaId
 
 const INCOME_CATS = ['Salario', 'Freelance', 'Ventas', 'Inversiones', 'Regalos', 'Otros ingresos'];
 const EXPENSE_CATS = ['Comida', 'Transporte', 'Salud', 'Entretenimiento', 'Ropa', 'Café/Snacks', 'Tecnología', 'Educación', 'Belleza', 'Hogar', 'Otros gastos'];
@@ -1399,9 +1551,22 @@ function fechaCorta(iso) {
    asignar) · 'cuenta:<id>' (cuenta digital concreta). */
 function trasladoEndpoints() {
   const eps = [{ id: 'efectivo', label: 'Efectivo' }];
-  cuentas.forEach(c => eps.push({ id: 'cuenta:' + c.id, label: c.name }));
+  cuentas.forEach(c => eps.push({
+    id: 'cuenta:' + c.id,
+    // En crédito se debe, no se tiene: se muestra la deuda.
+    label: c.tipo === 'credito' ? c.name + ' · debes ' + fmt(Math.max(0, cuentaDeuda(c.id))) : c.name
+  }));
   eps.push({ id: 'transfer', label: 'Digital general (sin asignar)' });
   return eps;
+}
+
+// Bolsillos de dinero propio (efectivo y débito): un desembolso no puede
+// llegar a una tarjeta de crédito, ni una cuota pagarse con ella.
+function endpointsDinero() {
+  return trasladoEndpoints().filter(e => !(e.id.indexOf('cuenta:') === 0 && cuentaTipo(e.id.slice(7)) === 'credito'));
+}
+function esEndpointCredito(ep) {
+  return !!ep && ep.indexOf('cuenta:') === 0 && cuentaTipo(ep.slice(7)) === 'credito';
 }
 
 function endpointLabel(ep) {
@@ -1409,6 +1574,14 @@ function endpointLabel(ep) {
   if (ep === 'transfer') return 'Digital general';
   if (ep && ep.indexOf('cuenta:') === 0) return cuentaName(ep.slice(7));
   return ep || '—';
+}
+
+// Opción de endpoint para los <select>: en crédito la etiqueta ya trae
+// la deuda ("· debes X"), así no se duplica el saldo con signo.
+function opcionEndpointHTML(e, sel) {
+  const esCred = e.id.indexOf('cuenta:') === 0 && cuentaTipo(e.id.slice(7)) === 'credito';
+  const extra = esCred ? '' : ' · ' + fmt(endpointBookBalance(e.id));
+  return `<option value="${e.id}"${e.id === sel ? ' selected' : ''}>${esc(e.label)}${extra}</option>`;
 }
 
 // Neto de traslados de un endpoint: entradas − salidas.
@@ -1426,7 +1599,7 @@ function endpointBookBalance(ep) {
   if (ep === 'efectivo') return cashDerived() + cashAdjust() + trasladoNet('efectivo');
   if (ep && ep.indexOf('cuenta:') === 0) {
     const id = ep.slice(7);
-    return cuentaDerivedBalance(id) + cuentaReconDiff(id) + trasladoNet(ep);
+    return cuentaBalance(id);
   }
   if (ep === 'transfer') {
     const der = digitalDerivedTotal();
@@ -1486,12 +1659,6 @@ function cashAdjust() {
     .reduce((s, b) => s + (Number(b.diff) || 0), 0);
 }
 
-function transferAdjustTotal() {
-  return balances
-    .filter(b => b.account === 'transfer')
-    .reduce((s, b) => s + (Number(b.diff) || 0), 0);
-}
-
 // Ajustes del "Total digital" (los que no van a una cuenta concreta).
 function transferAggregateAdjust() {
   return balances
@@ -1499,25 +1666,13 @@ function transferAggregateAdjust() {
     .reduce((s, b) => s + (Number(b.diff) || 0), 0);
 }
 
-// Todos los traslados que tocan lo digital (cuentas + bolsa general).
-function transferTrasladoTotal() {
-  let s = 0;
-  for (let i = 0; i < traslados.length; i++) {
-    const tr = traslados[i];
-    const m = Number(tr.amount) || 0;
-    const tocaDigital = ep => ep === 'transfer' || (ep && ep.indexOf('cuenta:') === 0);
-    if (tocaDigital(tr.to)) s += m;
-    if (tocaDigital(tr.from)) s -= m;
-  }
-  return s;
-}
-
 function accountTotals() {
   // Saldo en libros = movimientos ± conciliaciones ± traslados.
   // Antes solo se sumaban los movimientos, por eso conciliar
   // se veía en el historial pero NUNCA subía al total.
+  // Las tarjetas de crédito RESTAN (son deuda, no activo).
   const cash = cashDerived() + cashAdjust() + trasladoNet('efectivo');
-  const digital = digitalDerivedTotal() + transferAdjustTotal() + transferTrasladoTotal();
+  const digital = digitalDerivedDebito() + transferAdjustDebito() + transferTrasladoDebito() - creditoDeudaTotal();
   return { cash, digital };
 }
 
@@ -1548,6 +1703,8 @@ function previousBalanceFor(account, cuentaId) {
   // conciliacion e ignoraba los movimientos y traslados hechos
   // despues, asi que la diferencia salia mal.
   if (account === 'efectivo') return accountTotals().cash;
+  // Crédito: se concilia la DEUDA (positiva), no el saldo con signo.
+  if (cuentaId && cuentaTipo(cuentaId) === 'credito') return cuentaDeuda(cuentaId);
   if (cuentaId) return cuentaBalance(cuentaId);
   return accountTotals().digital;
 }
@@ -1576,6 +1733,8 @@ async function loadData() {
   cuentas = await dbGet('cuentas');
   traslados = await dbGet('traslados');
   prestamos = await dbGet('prestamos');
+  presupuestos = await dbGet('presupuestos');
+  metas = await dbGet('metas');
 }
 
 async function saveTransaction(tx) {
@@ -1632,6 +1791,67 @@ function cuentaDerivedBalance(id) {
   return inc - exp - sav;
 }
 
+// Modalidad de la cuenta: 'debito' | 'credito'.
+// Las cuentas viejas (sin tipo) se comportan como débito en los cálculos
+// pero se muestran como "Sin modalidad" para que las asignes.
+function cuentaTipo(id) {
+  const c = cuentas.find(x => x.id === id);
+  return (c && c.tipo === 'credito') ? 'credito' : 'debito';
+}
+function cuentaModalidad(id) {
+  const c = cuentas.find(x => x.id === id);
+  return (c && (c.tipo === 'debito' || c.tipo === 'credito')) ? c.tipo : '';
+}
+
+/* ── TARJETA DE CRÉDITO: es un PASIVO, no un activo ──────────
+   Compras (gastos) SUBEN la deuda; pagos/abonos e ingresos la BAJAN.
+   deuda = gastos − ingresos + ajustes − pagos(traslados entrantes).
+   En el total digital la deuda RESTA (signo negativo): el disponible
+   queda neto. Por eso NO se duplica en Patrimonio/Pasivos. */
+function creditoDeudaDerivada(id) {
+  return -cuentaDerivedBalance(id);
+}
+function cuentaDeuda(id) {
+  return creditoDeudaDerivada(id) + cuentaReconDiff(id) - trasladoNet('cuenta:' + id);
+}
+function creditoDeudaTotal() {
+  return cuentas.reduce((s, c) => s + (cuentaTipo(c.id) === 'credito' ? cuentaDeuda(c.id) : 0), 0);
+}
+
+// Solo movimientos digitales que NO son de tarjetas de crédito.
+function digitalDerivedDebito() {
+  let digital = 0;
+  for (let i = 0; i < transactions.length; i++) {
+    const t = transactions[i];
+    if (t.account !== 'transfer') continue;
+    if (t.type !== 'income' && t.type !== 'expense' && t.type !== 'saving') continue;
+    if (t.cuentaId && cuentaTipo(t.cuentaId) === 'credito') continue;
+    const monto = Number(t.amount) || 0;
+    digital += t.type === 'income' ? monto : -monto;
+  }
+  return digital;
+}
+
+// Ajustes de conciliación del lado débito (general + cuentas no-crédito).
+function transferAdjustDebito() {
+  return balances
+    .filter(b => b.account === 'transfer' && !(b.cuentaId && cuentaTipo(b.cuentaId) === 'credito'))
+    .reduce((s, b) => s + (Number(b.diff) || 0), 0);
+}
+
+// Traslados del lado débito (general + cuentas no-crédito).
+function transferTrasladoDebito() {
+  let s = 0;
+  for (let i = 0; i < traslados.length; i++) {
+    const tr = traslados[i];
+    const m = Number(tr.amount) || 0;
+    const esDebito = ep => ep === 'transfer' || (ep && ep.indexOf('cuenta:') === 0 && cuentaTipo(ep.slice(7)) !== 'credito');
+    if (esDebito(tr.to)) s += m;
+    if (esDebito(tr.from)) s -= m;
+  }
+  return s;
+}
+
 // Suma de los ajustes de conciliación propios de esa cuenta.
 function cuentaReconDiff(id) {
   return balances
@@ -1640,9 +1860,179 @@ function cuentaReconDiff(id) {
 }
 
 // Saldo mostrado: movimientos + ajustes conciliados + traslados.
-// Tras conciliar, este saldo equivale al saldo real declarado.
+// Débito: dinero a favor (positivo). Crédito: se muestra la deuda en
+// negativo para que el total digital quede neto. Tras conciliar, este
+// saldo equivale al saldo real declarado.
 function cuentaBalance(id) {
+  if (cuentaTipo(id) === 'credito') return -cuentaDeuda(id);
   return cuentaDerivedBalance(id) + cuentaReconDiff(id) + trasladoNet('cuenta:' + id);
+}
+
+/* ── TARJETA DE CRÉDITO: ciclo de facturación ────────────
+   Corte: día que cierra el periodo. Pago: día límite para pagar sin
+   intereses. Todo mensual y configurable por tarjeta. */
+function diaTarjeta(v, fb) {
+  const n = parseInt(v);
+  if (!Number.isFinite(n)) return fb || 1;
+  return Math.min(Math.max(n, 1), 31);
+}
+
+// Próxima fecha mensual con ese día (este mes si aún no pasa, si no el otro).
+function proximaFechaMensual(dia, desde) {
+  const base = desde || hoyLocal();
+  const ult = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+  let cand = new Date(base.getFullYear(), base.getMonth(), Math.min(dia, ult));
+  if (cand < base) {
+    const nx = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+    const ult2 = new Date(nx.getFullYear(), nx.getMonth() + 1, 0).getDate();
+    cand = new Date(nx.getFullYear(), nx.getMonth(), Math.min(dia, ult2));
+  }
+  return cand;
+}
+function diasRestantes(fecha) {
+  return Math.round((fecha - hoyLocal()) / 86400000);
+}
+/* ── CICLO DE FACTURACIÓN DE LA TARJETA ───────────────────
+   Cada compra entra al extracto del primer corte en o después de su
+   fecha (el día de corte entra en ese mismo extracto) y se paga el
+   primer día de pago DESPUÉS de ese corte. Ej. corte 25, pago 12:
+     compra 08/10 → corte 25/10 → paga 12/11 (35 días)
+     compra 26/10 → corte 25/11 → paga 12/12 (47 días) ← día oro
+   Día oro = el día siguiente al corte: lo que compres ese día queda
+   en el extracto que cierra un mes después, el plazo más largo.
+   A cuotas: la cuota k se factura en el corte k−1 meses después. */
+function fechaDia(y, m, dia) {
+  const ult = new Date(y, m + 1, 0).getDate();
+  return new Date(y, m, Math.min(dia, ult));
+}
+function mismaFecha(a, b) { return a.getTime() === b.getTime(); }
+function sumarDias(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+
+// Corte que cierra el extracto donde cae la fecha d.
+function corteDeFecha(c, d) {
+  const dc = diaTarjeta(c.diaCorte, 1);
+  let x = fechaDia(d.getFullYear(), d.getMonth(), dc);
+  if (x < d) x = fechaDia(d.getFullYear(), d.getMonth() + 1, dc);
+  return x;
+}
+// Corte k meses después (o antes, k negativo) de otro corte.
+function corteMas(c, x, k) {
+  return fechaDia(x.getFullYear(), x.getMonth() + k, diaTarjeta(c.diaCorte, 1));
+}
+// Fecha límite de pago del extracto que cierra en el corte x.
+function pagoDeCorte(c, x) {
+  const dp = diaTarjeta(c.diaPago, 10);
+  let pg = fechaDia(x.getFullYear(), x.getMonth(), dp);
+  if (pg <= x) pg = fechaDia(x.getFullYear(), x.getMonth() + 1, dp);
+  return pg;
+}
+// Corte y fecha de pago de una compra hecha el día d (para cuotas: la 1ª).
+function vencimientoCompra(c, d) {
+  const x = corteDeFecha(c, d);
+  const pago = pagoDeCorte(c, x);
+  return { corte: x, pago, dias: Math.round((pago - d) / 86400000) };
+}
+
+// x0 = último corte cerrado (su extracto es el que se debe pagar ahora),
+// x1 = corte del periodo en curso (cierra hoy o más adelante).
+function cicloTarjeta(c) {
+  const hoy = hoyLocal();
+  const x1 = corteDeFecha(c, hoy);
+  const x0 = corteMas(c, x1, -1);
+  const diaOro = sumarDias(x1, 1);
+  const enOro = enDiasOro(c, hoy);
+  return { hoy, x0, pago0: pagoDeCorte(c, x0), x1, pago1: pagoDeCorte(c, x1),
+           diaOro, oro: vencimientoCompra(c, diaOro), compraHoy: vencimientoCompra(c, hoy),
+           enOro: !!enOro, finOro: enOro ? enOro.fin : null, diasOroRestantes: enOro ? enOro.restantes : 0 };
+}
+
+/* Días oro: los primeros DIAS_ORO días después de un corte. Comprar ahí da
+   el plazo más largo (el día siguiente al corte el máximo, y baja un día
+   por cada día que pasa). Devuelve { fin, restantes } o null. */
+const DIAS_ORO = 5;          // ventana por defecto
+const DIAS_ORO_MAX = 15;
+// Cada tarjeta puede tener su propia ventana (se edita con ✏️ en Cuentas).
+function diasOroDe(c) {
+  const n = parseInt(c && c.diasOro);
+  return Number.isFinite(n) ? Math.min(Math.max(n, 1), DIAS_ORO_MAX) : DIAS_ORO;
+}
+function enDiasOro(c, d) {
+  const x = corteDeFecha(c, d);
+  if (mismaFecha(x, d)) return null;                 // el día de corte es el peor
+  const inicio = sumarDias(corteMas(c, x, -1), 1);   // día siguiente al corte anterior
+  const fin = sumarDias(inicio, diasOroDe(c) - 1);
+  if (d < inicio || d > fin || fin >= x) return null;
+  return { fin, restantes: Math.round((fin - d) / 86400000) };
+}
+
+function comprasTarjeta(id) {
+  return transactions.filter(t => t.account === 'transfer' && t.cuentaId === id && t.type === 'expense');
+}
+
+// Lo que factura un corte: compras de contado de ese periodo + la cuota
+// que le toca a cada compra diferida. hasta=true acumula todos los cortes ≤ x.
+function facturadoEnCorte(c, x, hasta) {
+  let total = 0;
+  comprasTarjeta(c.id).forEach(t => {
+    const d = parseLocalDate(t.date);
+    if (isNaN(d.getTime())) return;
+    const primer = corteDeFecha(c, d);
+    const monto = Number(t.amount) || 0;
+    const n = txCuotas(t);
+    for (let k = 0; k < n; k++) {
+      const xc = k === 0 ? primer : corteMas(c, primer, k);
+      if (hasta ? xc <= x : mismaFecha(xc, x)) total += n > 1 ? Math.round(monto / n) : monto;
+    }
+  });
+  return total;
+}
+
+// Pagos y abonos hechos a la tarjeta (traslados hacia ella e ingresos en ella).
+function pagosTarjeta(id) {
+  let s = trasladoNet('cuenta:' + id);
+  transactions.forEach(t => {
+    if (t.account === 'transfer' && t.cuentaId === id && t.type === 'income') s += Number(t.amount) || 0;
+  });
+  return s;
+}
+
+/* Pago exigible: todo lo facturado hasta el último corte cerrado menos lo
+   ya pagado (incluye saldos de extractos anteriores que quedaron sin
+   pagar). Nunca supera la deuda real (conciliaciones, intereses). */
+function creditoPagoExigible(id) {
+  const c = cuentas.find(x => x.id === id);
+  if (!c) return null;
+  const ci = cicloTarjeta(c);
+  const deuda = Math.max(0, cuentaDeuda(id));
+  const exigible = Math.min(deuda, Math.max(0, facturadoEnCorte(c, ci.x0, true) - pagosTarjeta(id)));
+  return Object.assign(ci, { exigible, alCorte: facturadoEnCorte(c, ci.x1, false), deuda });
+}
+
+// Compatibilidad: lo que va del corte en curso.
+function creditoGastosDelCorte(id) {
+  const c = cuentas.find(x => x.id === id);
+  return c ? facturadoEnCorte(c, cicloTarjeta(c).x1, false) : 0;
+}
+// Nº de cuotas por compra (1 = contado). Solo aplica a crédito.
+function txCuotas(t) {
+  const n = parseInt(t && t.cuotas);
+  return (Number.isFinite(n) && n > 1) ? Math.min(n, 120) : 1;
+}
+// Cuotas pendientes: las que todavía no entran a un extracto cerrado
+// (la del corte en curso y las siguientes) y su saldo.
+function creditoCuotasPendientes(id) {
+  let n = 0, monto = 0, compras = 0;
+  const c = cuentas.find(x => x.id === id);
+  if (!c) return { n, monto, compras };
+  const x0 = cicloTarjeta(c).x0;
+  comprasTarjeta(id).filter(t => txCuotas(t) > 1).forEach(t => {
+    const tot = txCuotas(t);
+    const primer = corteDeFecha(c, parseLocalDate(t.date));
+    let rest = 0;
+    for (let k = 0; k < tot; k++) if (corteMas(c, primer, k) > x0) rest++;
+    if (rest > 0) { n += rest; compras++; monto += Math.round(Number(t.amount) * rest / tot); }
+  });
+  return { n, monto, compras };
 }
 
 /* Desglose completo del dinero digital, en una sola pasada. */
@@ -1660,21 +2050,15 @@ function digitalBreakdown() {
     if (t.cuentaId) derivado.set(t.cuentaId, (derivado.get(t.cuentaId) || 0) + delta);
   }
 
-  const ajustes = new Map();      // cuentaId -> diferencias conciliadas
-  for (let i = 0; i < balances.length; i++) {
-    const b = balances[i];
-    if (b.account === 'transfer' && b.cuentaId) {
-      ajustes.set(b.cuentaId, (ajustes.get(b.cuentaId) || 0) + (Number(b.diff) || 0));
-    }
-  }
-
   let asignadoDerived = 0, totalCuentas = 0;
   const items = cuentas.map(c => {
     const der = derivado.get(c.id) || 0;
     asignadoDerived += der;
-    const balance = der + (ajustes.get(c.id) || 0) + trasladoNet('cuenta:' + c.id);
+    // Débito suma, crédito resta (deuda). El desglose usa la misma
+    // cuentaBalance() que el resto de la app para no descuadrar.
+    const balance = cuentaBalance(c.id);
     totalCuentas += balance;
-    return { id: c.id, name: c.name, entidad: c.entidad || '', balance };
+    return { id: c.id, name: c.name, entidad: c.entidad || '', tipo: cuentaModalidad(c.id), balance };
   }).sort((a, b) => b.balance - a.balance);
 
   // Bolsa sin asignar: movimientos sueltos + ajustes del "Total digital"
@@ -1687,8 +2071,9 @@ function digitalBreakdown() {
 
 /* <option> de cuentas digitales para los formularios. */
 function cuentaOptionsHTML(selectedId) {
+  const tag = c => (c.tipo === 'credito' ? ' · crédito' : (c.tipo === 'debito' ? ' · débito' : ''));
   const opts = cuentas.map(c =>
-    `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}</option>`
+    `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}${tag(c)}</option>`
   ).join('');
   return `<option value="" ${!selectedId ? 'selected' : ''}>— Sin asignar —</option>` + opts;
 }
@@ -1773,8 +2158,22 @@ function renderPage(page) {
 /* ─────────────────────────────────────────────────────────
    FORMATTERS
 ───────────────────────────────────────────────────────── */
+// Formateadores creados una sola vez: construir un Intl.NumberFormat es
+// costoso y fmt() se llama cientos de veces en cada render.
+const _fmtMoneda = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const _fmtNumero = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
+const _fmtDiaMes = new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: 'short' });
+
 function fmt(n) {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n || 0);
+  return _fmtMoneda.format(n || 0);
+}
+
+// Orden por fecha descendente comparando el texto 'YYYY-MM-DD' (válido
+// porque todas las fechas se guardan en ese formato): evita crear dos
+// objetos Date por comparación al ordenar listas largas.
+function porFechaDesc(a, b) {
+  const x = a.date || '', y = b.date || '';
+  return x < y ? 1 : (x > y ? -1 : 0);
 }
 
 /* ── FORMATO DE MONTOS EN INPUTS ───────────────────────────
@@ -1786,7 +2185,7 @@ function fmt(n) {
 
 // "24.194" sin símbolo — para precargar inputs al editar.
 function fmtPlain(n) {
-  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(n || 0);
+  return _fmtNumero.format(n || 0);
 }
 
 // "$ 24.194" — formato que se muestra DENTRO de los campos de monto.
@@ -1891,10 +2290,16 @@ function isSameMonth(dateStr, month, year) {
 function renderDashboard() {
   document.getElementById('month-label').textContent = MONTHS_ES[currentMonth] + ' ' + currentYear;
 
-  const monthTx = transactions.filter(t => isSameMonth(t.date, currentMonth, currentYear));
-  const income = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const expense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const savingMonth = monthTx.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
+  // Una sola pasada para los totales del mes y los acumulados (antes
+  // eran seis recorridos completos de transactions en cada render).
+  let income = 0, expense = 0, savingMonth = 0, totalExpense = 0, totalSaving = 0;
+  for (let i = 0; i < transactions.length; i++) {
+    const t = transactions[i];
+    const delMes = isSameMonth(t.date, currentMonth, currentYear);
+    if (t.type === 'expense') { totalExpense += t.amount; if (delMes) expense += t.amount; }
+    else if (t.type === 'saving') { totalSaving += t.amount; if (delMes) savingMonth += t.amount; }
+    else if (t.type === 'income' && delMes) income += t.amount;
+  }
 
   // Totales generales: saldo en libros por bolsillo. Cada tarjeta ya
   // incluye movimientos + conciliaciones + traslados, asi que el
@@ -1905,8 +2310,6 @@ function renderDashboard() {
   const adjustedTotal = accTotals.cash + accTotals.digital;
 
   document.getElementById('hero-balance').textContent = fmt(adjustedTotal);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const totalSaving = transactions.filter(t => t.type === 'saving').reduce((s, t) => s + t.amount, 0);
   document.getElementById('hero-cash').textContent = fmt(totalExpense);
   document.getElementById('hero-bank').textContent = fmt(totalSaving);
   const heroAdjustEl = document.getElementById('hero-adjust');
@@ -1921,6 +2324,8 @@ function renderDashboard() {
   // Efectivo vs Digital: saldo en libros (ya incluye conciliaciones y traslados)
   document.getElementById('stat-cash-total').textContent = fmt(accTotals.cash);
   document.getElementById('stat-digital-total').textContent = fmt(accTotals.digital);
+  document.getElementById('stat-cash-total').classList.toggle('danger', Math.round(accTotals.cash) < 0);
+  document.getElementById('stat-digital-total').classList.toggle('danger', Math.round(accTotals.digital) < 0);
 
   // Diferencia de la última conciliación por cuenta
   renderAccountDiffBadge('stat-cash-diff', 'efectivo');
@@ -1928,6 +2333,12 @@ function renderDashboard() {
 
   // Desglose de cuentas digitales
   renderDashCuentas();
+
+  // Efectivo/débito en negativo, próximos pagos (7 días) y presupuestos en 80 %+
+  renderAvisoNegativos();
+  renderProximosPagos();
+  renderDiasOro();
+  renderAlertasPresupuesto();
 
   // Carga MENSUAL de los fijos: los de periodicidad mayor entran solo con
   // su fraccion del mes, no con el pago completo.
@@ -1989,7 +2400,7 @@ function renderDashboard() {
   }
 
   // Recent (last 5)
-  const sorted = [...transactions].sort((a,b) => parseLocalDate(b.date) - parseLocalDate(a.date)).slice(0, 5);
+  const sorted = [...transactions].sort(porFechaDesc).slice(0, 5);
   const list = document.getElementById('recent-list');
   if (!sorted.length) {
     list.innerHTML = '<div class="empty"><div class="e-icon">📭</div>Sin movimientos aún. Toca + para agregar.</div>';
@@ -2008,7 +2419,7 @@ function renderDashCuentas() {
   card.style.display = 'block';
   const rows = bd.items.map(c => `
     <div class="rule-labels" style="margin-bottom:.4rem">
-      <span>${esc(c.name)}</span><strong>${fmt(c.balance)}</strong>
+      <span>${esc(c.name)}${c.tipo === 'credito' ? ' (debes)' : ''}</span><strong style="${c.tipo === 'credito' ? 'color:var(--danger)' : ''}">${fmt(c.balance)}</strong>
     </div>`).join('');
   const extra = Math.round(bd.sinAsignar) !== 0 ? `
     <div class="rule-labels" style="margin-bottom:.4rem;color:var(--text3)">
@@ -2034,11 +2445,17 @@ function renderAccountDiffBadge(elId, account) {
 ───────────────────────────────────────────────────────── */
 let activeFilter = 'all';
 let _txBusqueda = '';
+// Con miles de movimientos pintar todo de una vez congela el celular:
+// se muestran por bloques con un botón "Mostrar más".
+const TX_BLOQUE = 100;
+let _txLimite = TX_BLOQUE;
 
 function renderTransactions() {
-  document.querySelectorAll('.filter-chip').forEach(c => {
+  // Solo los chips de esta página (antes tomaba también los de Cuentas
+  // y les cambiaba el onclick).
+  document.querySelectorAll('#filter-bar .filter-chip').forEach(c => {
     c.classList.toggle('active', c.dataset.filter === activeFilter);
-    c.onclick = () => { activeFilter = c.dataset.filter; renderTransactions(); };
+    c.onclick = () => { activeFilter = c.dataset.filter; _txLimite = TX_BLOQUE; renderTransactions(); };
   });
 
   let filtered = [...transactions];
@@ -2060,7 +2477,7 @@ function renderTransactions() {
   else if (activeFilter === 'efectivo') filtered = filtered.filter(t => t.account === 'efectivo');
   else if (activeFilter === 'transfer') filtered = filtered.filter(t => t.account === 'transfer');
 
-  filtered.sort((a,b) => parseLocalDate(b.date) - parseLocalDate(a.date));
+  filtered.sort(porFechaDesc);
 
   const list = document.getElementById('tx-list');
   const resumen = document.getElementById('tx-resumen');
@@ -2075,8 +2492,23 @@ function renderTransactions() {
   // Neto del resultado: da contexto inmediato al buscar o filtrar.
   const suma = filtered.reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0);
   resumen.textContent = `${filtered.length} movimiento(s) · neto ${fmt(suma)}`;
-  list.innerHTML = filtered.map(t => txItemHTML(t, true)).join('');
+  const visibles = filtered.slice(0, _txLimite);
+  const restantes = filtered.length - visibles.length;
+  list.innerHTML = visibles.map(t => txItemHTML(t, true)).join('') + (restantes > 0
+    ? `<button class="btn-primary" id="tx-mas" style="background:var(--card);color:var(--text);border:1px solid var(--border2)">Mostrar más (${restantes} restantes)</button>`
+    : '');
   attachTxEvents(list);
+  const mas = document.getElementById('tx-mas');
+  if (mas) mas.onclick = () => { _txLimite += TX_BLOQUE; renderTransactions(); };
+}
+
+// Compra con tarjeta de crédito: fecha en que se paga (la 1ª cuota si es diferida).
+function pagoCompraTxt(t) {
+  if (t.type !== 'expense' || t.account !== 'transfer' || !t.cuentaId || cuentaTipo(t.cuentaId) !== 'credito') return '';
+  const c = cuentas.find(x => x.id === t.cuentaId);
+  const d = parseLocalDate(t.date);
+  if (!c || isNaN(d.getTime())) return '';
+  return (txCuotas(t) > 1 ? ' · 1ª cuota el ' : ' · se paga el ') + _fmtDiaMes.format(vencimientoCompra(c, d).pago);
 }
 
 function txItemHTML(t, showActions) {
@@ -2085,7 +2517,7 @@ function txItemHTML(t, showActions) {
   const sign = isIncome ? '+' : (isSaving ? '↳' : '-');
   const icon = isIncome ? '↑' : (isSaving ? '💰' : '↓');
   const d = parseLocalDate(t.date);
-  const dateStr = d.toLocaleDateString('es-CO', {day:'2-digit', month:'short'});
+  const dateStr = isNaN(d.getTime()) ? '—' : _fmtDiaMes.format(d);
   const accountBadge = t.account === 'efectivo'
     ? '<span class="badge efectivo">Efectivo</span>'
     : `<span class="badge transfer">${esc(t.cuentaId ? cuentaName(t.cuentaId) : 'Transferencia')}</span>`;
@@ -2099,7 +2531,7 @@ function txItemHTML(t, showActions) {
       <div class="tx-icon ${t.type}">${icon}</div>
       <div class="tx-info">
         <div class="tx-cat">${esc(t.category)}</div>
-        <div class="tx-sub">${dateStr} · ${accountBadge}${t.notes ? ` · ${esc(t.notes)}` : ''}</div>
+        <div class="tx-sub">${dateStr} · ${accountBadge}${t.cuotas && t.cuotas > 1 ? ` · ${t.cuotas} cuotas` : ''}${pagoCompraTxt(t)}${t.metaId ? ` · 🎯 ${esc(metaName(t.metaId))}` : ''}${t.notes ? ` · ${esc(t.notes)}` : ''}</div>
       </div>
       <div class="tx-amount ${t.type}">${sign}${fmt(t.amount)}</div>
       ${actions}
@@ -2388,6 +2820,17 @@ async function guardarEdicionPago(id) {
   if (!fecha) { showToast('⚠ Ingresa la fecha del pago'); return; }
   const [metodo, cuentaId] = document.getElementById('ep-metodo').value.split(':');
 
+  if (pago.txId) {
+    const txViejo = transactions.find(t => t.id === pago.txId);
+    if (txViejo) {
+      const errSaldo = validarSaldoMovimiento(Object.assign({}, txViejo, {
+        account: metodo === 'digital' ? 'transfer' : 'efectivo',
+        cuentaId: metodo === 'digital' ? (cuentaId || '') : ''
+      }), txViejo);
+      if (errSaldo) { showToast(errSaldo); return; }
+    }
+  }
+
   if (!tomarCandado()) return;
   try {
     /* Solo se sincronizan metodo y cuenta (de donde sale la plata).
@@ -2442,6 +2885,11 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
   // Un pago de fecha pasada no genera movimiento: ese dinero ya salio de
   // la cuenta y descontarlo ahora lo restaria dos veces.
   const generaMovimiento = descontar !== false;
+  if (generaMovimiento) {
+    const errSaldo = validarSaldoMovimiento({ type: 'expense', amount: f.amount,
+      account: metodo === 'digital' ? 'transfer' : 'efectivo', cuentaId: metodo === 'digital' ? cuentaId : '' }, null);
+    if (errSaldo) { _pagoEnCurso = false; showToast(errSaldo); return; }
+  }
 
   try {
     let txId = '';
@@ -2502,6 +2950,8 @@ async function confirmRevertirPago(id) {
    AHORROS
 ───────────────────────────────────────────────────────── */
 function renderAhorros() {
+  renderMetas();
+
   const savingTx = transactions.filter(t => t.type === 'saving');
   const total = savingTx.reduce((s,t) => s+t.amount, 0);
   const monthTotal = savingTx.filter(t => isSameMonth(t.date, currentMonth, currentYear)).reduce((s,t) => s+t.amount, 0);
@@ -2510,7 +2960,7 @@ function renderAhorros() {
   document.getElementById('ahorro-mes-val').textContent = fmt(monthTotal);
 
   const list = document.getElementById('ahorros-list');
-  const sorted = [...savingTx].sort((a,b) => parseLocalDate(b.date) - parseLocalDate(a.date));
+  const sorted = [...savingTx].sort(porFechaDesc);
   if (!sorted.length) {
     list.innerHTML = '<div class="empty"><div class="e-icon">💰</div>Sin ahorros registrados. Toca + para agregar uno.</div>';
     return;
@@ -2522,43 +2972,204 @@ function renderAhorros() {
 /* ─────────────────────────────────────────────────────────
    CUENTAS DIGITALES — página
 ───────────────────────────────────────────────────────── */
+let _cuentaFiltro = 'todas';   // todas | debito | credito | sin
+
+// Cambiar débito ⇄ crédito es libre: los saldos se reinterpretan solos.
+// Débito suma (plata tuya), crédito resta (deuda). Los movimientos
+// históricos no se tocan; solo cambia cómo se leen.
+async function confirmTipoCuenta(id, tipo) {
+  const c = cuentas.find(x => x.id === id);
+  if (!c || (tipo !== 'debito' && tipo !== 'credito')) { renderCuentas(); return; }
+  const actual = cuentaModalidad(id);
+  if (actual === tipo) return;
+  const aCredito = tipo === 'credito';
+  const ok = await appConfirm(
+    aCredito
+      ? `¿Marcar "${esc(c.name)}" como <strong>crédito</strong>? Sus gastos pasarán a sumar como <strong>deuda</strong> y restarán del total digital. Ideal para tarjetas de crédito.`
+      : `¿Marcar "${esc(c.name)}" como <strong>débito</strong>? Su saldo volverá a sumar como plata tuya.`,
+    'Cambiar');
+  if (!ok) { renderCuentas(); return; }
+  try {
+    await saveCuenta(Object.assign({}, c, { tipo,
+      diaCorte: c.diaCorte || 1, diaPago: c.diaPago || 10, cupo: c.cupo || 0 }));
+    showToast(aCredito ? '💳 Ahora es crédito: configura corte y pago en ✏️' : '💵 Ahora es débito');
+    renderCuentas();
+  } catch (e) {
+    console.error('Error cambiando modalidad:', e);
+    showToast('❌ No se pudo cambiar. Intenta de nuevo.');
+  }
+}
+
+// Pagar tarjeta = traslado hacia la deuda (baja caja y deuda, el total
+// no cambia y no cuenta como gasto: el gasto fue la compra).
+// Pagar la tarjeta = traslado desde efectivo o una cuenta débito hacia la
+// tarjeta: baja la deuda y libera cupo, sin contar como gasto (el gasto ya
+// se registró en cada compra). Origen sugerido: el bolsillo con más saldo.
+function pagarTarjeta(id) {
+  const deuda = cuentaDeuda(id);
+  if (deuda <= 0) { showToast('✓ Sin deuda por pagar en esta tarjeta'); return; }
+  const origenes = ['efectivo'].concat(cuentas.filter(c => cuentaTipo(c.id) !== 'credito').map(c => 'cuenta:' + c.id));
+  const origen = origenes.reduce((mejor, ep) =>
+    (Number(endpointBookBalance(ep)) || 0) > (Number(endpointBookBalance(mejor)) || 0) ? ep : mejor, 'efectivo');
+  // Se sugiere el pago del extracto ya cerrado (lo que el banco cobra en
+  // esta fecha); si no hay, la deuda total como abono anticipado.
+  const ci = creditoPagoExigible(id);
+  const fc = d => fechaCorta(todayISO(d));
+  const sugerido = ci && ci.exigible > 0 ? ci.exigible : deuda;
+  const detalle = ci && ci.exigible > 0
+    ? `Para no pagar intereses paga ${fmt(ci.exigible)} antes del ${fc(ci.pago0)} (extracto del corte ${fc(ci.x0)}). Deuda total: ${fmt(deuda)}.`
+    : `El último extracto está al día. Deuda total: ${fmt(deuda)} (puedes abonar por adelantado).`;
+  openTrasladoModal(origen, 'cuenta:' + id, {
+    titulo: '💰 Pagar ' + cuentaName(id),
+    intro: detalle + ' Elige de dónde sale la plata (efectivo o una cuenta débito). ' +
+           'El pago baja la deuda y libera cupo; no cuenta como gasto porque cada compra ya se registró.',
+    monto: sugerido
+  });
+}
+
+function verMovsCuenta(id) {
+  _txBusqueda = cuentaName(id);
+  activeFilter = 'all';
+  _txLimite = TX_BLOQUE;
+  const input = document.getElementById('tx-search');
+  if (input) input.value = _txBusqueda;
+  goToPage('transacciones');
+}
 function renderCuentas() {
   const bd = digitalBreakdown();
   document.getElementById('cuentas-total-val').textContent = fmt(bd.total);
+  const nDeb = bd.items.filter(c => c.tipo === 'debito').length;
+  const nCred = bd.items.filter(c => c.tipo === 'credito').length;
+  const nSin = bd.items.filter(c => !c.tipo).length;
+  // La deuda de crédito ya resta en el total (neto): no se duplica en Pasivos.
   document.getElementById('cuentas-total-sub').textContent = cuentas.length
-    ? `${cuentas.length} cuenta${cuentas.length > 1 ? 's' : ''} · ${fmt(bd.totalCuentas)} asignado`
+    ? `${cuentas.length} cuenta${cuentas.length > 1 ? 's' : ''} · ${nDeb} débito · ${nCred} crédito${nSin ? ` · ${nSin} sin modalidad` : ''}`
     : 'Aún no has creado cuentas digitales';
+
+  // Filtro por modalidad (las viejas, sin tipo, caen en "Sin modalidad").
+  const baseCf = { todas: 'Todas', debito: '💵 Débito', credito: '💳 Crédito', sin: '❓ Sin modalidad' };
+  document.querySelectorAll('#cuentas-filter-bar .filter-chip').forEach(ch => {
+    const b = ch.dataset.cf;
+    const n = b === 'todas' ? cuentas.length
+      : b === 'sin' ? nSin : bd.items.filter(c => c.tipo === b).length;
+    ch.classList.toggle('active', _cuentaFiltro === b);
+    ch.textContent = `${baseCf[b]} · ${n}`;
+    ch.onclick = () => { _cuentaFiltro = b; renderCuentas(); };
+  });
+  const visibles = bd.items.filter(c => _cuentaFiltro === 'todas'
+    || (_cuentaFiltro === 'sin' ? !c.tipo : c.tipo === _cuentaFiltro));
 
   const list = document.getElementById('cuentas-list');
   if (!cuentas.length) {
     list.innerHTML = '<div class="empty"><div class="e-icon">💳</div>Sin cuentas digitales. Toca + para crear la primera (ej: Nequi, Bancolombia).</div>';
+  } else if (!visibles.length) {
+    list.innerHTML = '<div class="empty"><div class="e-icon">🔍</div>Ninguna cuenta en este filtro.</div>';
   } else {
-    list.innerHTML = bd.items.map(c => {
+    list.innerHTML = visibles.map(c => {
+      const full = cuentas.find(x => x.id === c.id) || {};
       const last = lastReconciliation('transfer', c.id);
-      const sub = last
+      const concilia = last
         ? `Conciliada · última dif. ${last.diff >= 0 ? '+' : ''}${fmt(last.diff)}`
         : 'Sin conciliar aún';
+      const badgeTipo = !c.tipo
+        ? '<span class="badge unpaid">❓ Sin modalidad</span>'
+        : (c.tipo === 'credito' ? '<span class="badge overdue">💳 Crédito</span>' : '<span class="badge transfer">💵 Débito</span>');
+      const selTipo = `
+        <select class="form-input" data-tipo="${c.id}" title="Cambiar modalidad"
+                style="margin-top:.5rem;padding:.4rem .6rem;font-size:.8rem;max-width:190px">
+          ${!c.tipo ? '<option value="" selected>Asignar modalidad…</option>' : ''}
+          <option value="debito" ${c.tipo === 'debito' ? 'selected' : ''}>💵 Débito</option>
+          <option value="credito" ${c.tipo === 'credito' ? 'selected' : ''}>💳 Crédito</option>
+        </select>`;
+
+      // ── Bloque de crédito: deuda, cupo, corte, pago, cuotas ──
+      let montoHtml, extraHtml = '', btnPagar = '';
+      if (c.tipo === 'credito') {
+        const deuda = cuentaDeuda(c.id);
+        montoHtml = deuda > 0
+          ? `<div class="fijo-amount" style="color:var(--danger)">Debes ${fmt(deuda)}</div>`
+          : (deuda < 0
+            ? `<div class="fijo-amount" style="color:var(--ok)">A favor ${fmt(-deuda)}</div>`
+            : `<div class="fijo-amount">$0</div>`);
+        const cupo = Number(full.cupo) || 0;
+        // El cupo total queda fijo; lo que baja es el DISPONIBLE (cupo − deuda)
+        // y vuelve a subir al pagar. Más del 30 % de uso ya pesa en tu historial.
+        let cupoTxt = '';
+        if (cupo > 0) {
+          const uso = Math.max(0, deuda) / cupo;
+          const color = uso >= 0.8 ? 'red' : (uso >= 0.3 ? 'yellow' : 'green');
+          cupoTxt = `
+          <div style="margin-top:.45rem;max-width:260px">
+            <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text2)">
+              <span>Cupo disponible: <strong>${fmt(Math.max(0, cupo - deuda))}</strong> de ${fmt(cupo)}</span>
+              <strong style="color:var(--text);white-space:nowrap;margin-left:.5rem">${Math.round(uso * 100)} %</strong>
+            </div>
+            <div class="prog-bar" style="margin:.3rem 0 0"><div class="prog-fill ${color}" style="width:${Math.min(100, Math.round(uso * 100))}%"></div></div>
+            ${uso >= 1 ? '<div style="font-size:.72rem;color:var(--danger-text);font-weight:600;margin-top:.25rem">Cupo agotado: paga la tarjeta para volver a usarla</div>' : ''}
+          </div>`;
+        }
+        const ci = creditoPagoExigible(c.id);
+        const fc = d => fechaCorta(todayISO(d));
+        const txtDias = d => d === 0 ? 'hoy' : (d === 1 ? 'mañana' : `en ${d} días`);
+        const dC = diasRestantes(ci.x1), dP0 = diasRestantes(ci.pago0);
+        const pend = creditoCuotasPendientes(c.id);
+        // Extracto ya cerrado: lo que hay que pagar ahora.
+        const pagoAhora = ci.exigible > 0
+          ? `<div class="tc-linea ${dP0 < 0 ? 'vencido' : ''}">💰 <span>Paga <strong>${fmt(ci.exigible)}</strong> antes del ${fc(ci.pago0)}
+               (${dP0 < 0 ? 'vencido hace ' + (-dP0) + ' días' : txtDias(dP0)}) · extracto del corte ${fc(ci.x0)}</span></div>`
+          : `<div class="tc-linea">✅ <span>Extracto del corte ${fc(ci.x0)} al día</span></div>`;
+        extraHtml = `
+          <div class="tc-ciclo">
+            ${pagoAhora}
+            <div class="tc-linea">✂️ <span>Corte en curso cierra el ${fc(ci.x1)} (${txtDias(dC)}) · van <strong>${fmt(ci.alCorte)}</strong> → se pagan el ${fc(ci.pago1)}</span></div>
+            <div class="tc-linea">🛒 <span>Si compras hoy, pagas el ${fc(ci.compraHoy.pago)} (${ci.compraHoy.dias} días)</span></div>
+            ${ci.enOro
+              ? `<div class="tc-linea oro activo">🌟 <span><strong>¡Estás en días oro!</strong> Lo que compres hoy lo pagas el ${fc(ci.compraHoy.pago)} (<strong>${ci.compraHoy.dias} días</strong> de plazo). ${ci.diasOroRestantes === 0 ? 'Hoy es el último día.' : `Aprovecha hasta el ${fc(ci.finOro)}.`} <span style="color:var(--text3)">(ventana de ${diasOroDe(full)} ${diasOroDe(full) === 1 ? 'día' : 'días'} · cámbiala con ✏️)</span></span></div>`
+              : `<div class="tc-linea oro">🌟 <span><strong>Próximo día oro: ${fc(ci.diaOro)}</strong> · lo que compres ese día lo pagas el ${fc(ci.oro.pago)} (<strong>${ci.oro.dias} días</strong> de plazo) <span style="color:var(--text3)">· ventana de ${diasOroDe(full)} ${diasOroDe(full) === 1 ? 'día' : 'días'}, cámbiala con ✏️</span></span></div>`}
+            ${pend.n > 0 ? `<div class="tc-linea">⏳ <span>${pend.n} cuota(s) por facturar · ${fmt(pend.monto)}</span></div>` : ''}
+          </div>
+          ${cupoTxt}`;
+        btnPagar = deuda > 0 ? `<button class="tx-btn pay" data-id="${c.id}" title="Pagar tarjeta">💰</button>` : '';
+      } else {
+        montoHtml = `<div class="fijo-amount" style="color:${c.balance >= 0 ? 'var(--blue)' : 'var(--danger)'}">${fmt(c.balance)}</div>`;
+      }
+
       return `
-      <div class="fijo-item">
+      <div class="fijo-item" style="align-items:flex-start">
         <div class="fijo-info">
           <div class="f-name">${esc(c.name)}</div>
-          <div class="f-sub">${c.entidad ? esc(c.entidad) + ' · ' : ''}${sub}</div>
+          <div class="f-sub">${c.entidad ? esc(c.entidad) + ' · ' : ''}${concilia}</div>
+          <div style="margin-top:.4rem;display:flex;gap:.35rem;flex-wrap:wrap;align-items:center">${badgeTipo}</div>
+          ${selTipo}
+          ${extraHtml}
         </div>
-        <div class="fijo-amount" style="color:${c.balance >= 0 ? 'var(--blue)' : 'var(--danger)'}">${fmt(c.balance)}</div>
+        <div style="text-align:right;flex-shrink:0">${montoHtml}</div>
         <div class="tx-actions" style="margin-left:.5rem">
           <button class="tx-btn recon" data-id="${c.id}" title="Conciliar saldo">⚖️</button>
-          <button class="tx-btn move" data-id="${c.id}" title="Trasladar a/desde esta cuenta">⇄</button>
+          ${c.tipo === 'credito'
+            ? btnPagar
+            : `<button class="tx-btn move" data-id="${c.id}" title="Trasladar a/desde esta cuenta">⇄</button>`}
+          <button class="tx-btn view" data-id="${c.id}" title="Ver movimientos">👁</button>
           <button class="tx-btn edit" data-id="${c.id}" title="Editar">✏️</button>
           <button class="tx-btn del" data-id="${c.id}" title="Eliminar">🗑</button>
         </div>
       </div>`;
     }).join('');
 
+    list.querySelectorAll('[data-tipo]').forEach(sel => {
+      sel.onchange = () => confirmTipoCuenta(sel.dataset.tipo, sel.value);
+    });
     list.querySelectorAll('.tx-btn.recon').forEach(b => {
       b.onclick = () => openReconciliationModal('transfer', b.dataset.id);
     });
     list.querySelectorAll('.tx-btn.move').forEach(b => {
       b.onclick = () => openTrasladoModal('cuenta:' + b.dataset.id, 'efectivo');
+    });
+    list.querySelectorAll('.tx-btn.pay').forEach(b => {
+      b.onclick = () => pagarTarjeta(b.dataset.id);
+    });
+    list.querySelectorAll('.tx-btn.view').forEach(b => {
+      b.onclick = () => verMovsCuenta(b.dataset.id);
     });
     list.querySelectorAll('.tx-btn.edit').forEach(b => {
       b.onclick = () => openCuentaForm(cuentas.find(x => x.id === b.dataset.id));
@@ -2570,15 +3181,15 @@ function renderCuentas() {
 
   // Bolsa digital general: movimientos sueltos + ajustes del "Total digital" + traslados.
   const un = document.getElementById('cuentas-unassigned');
-  const nSin = transactions.filter(t => t.account === 'transfer' && !t.cuentaId).length;
-  if (nSin > 0) {
+  const nSueltos = transactions.filter(t => t.account === 'transfer' && !t.cuentaId).length;
+  if (nSueltos > 0) {
     un.innerHTML = `
       <div class="ant-alert" id="btn-asignar" style="cursor:pointer">
         <div class="ant-icon">📥</div>
         <div style="flex:1">
           <div style="font-weight:600;font-size:.85rem">Sin asignar: ${fmt(bd.sinAsignar)}</div>
           <div style="font-size:.78rem;color:var(--text2)">
-            ${nSin} movimiento(s) digital(es) no pertenecen a ninguna cuenta.
+            ${nSueltos} movimiento(s) digital(es) no pertenecen a ninguna cuenta.
             <strong>Toca aquí para asignarlos</strong> y completar el desglose.
           </div>
         </div>
@@ -2612,7 +3223,7 @@ function openAsignarCuentaModal() {
 
   const opciones = cuentas.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
   const signo = t => t.type === 'income' ? '+' : '−';
-  const color = t => t.type === 'income' ? 'var(--ok)' : (t.type === 'saving' ? '#8a5cf6' : 'var(--danger)');
+  const color = t => t.type === 'income' ? 'var(--ok)' : (t.type === 'saving' ? 'var(--purple)' : 'var(--danger)');
 
   openModal('Asignar movimientos', `
     <p class="muted" style="margin-bottom:1rem">
@@ -2695,7 +3306,9 @@ async function confirmBorrarMovimientoSuelto(txId) {
 }
 
 function openCuentaForm(existing) {
-  const c = existing || { name: '', entidad: '', notes: '' };
+  const c = existing || { name: '', entidad: '', notes: '', tipo: 'debito' };
+  const tipoActual = (c.tipo === 'credito' || c.tipo === 'debito') ? c.tipo : '';
+  _cuentaTipoSel = tipoActual || 'debito';
   openModal((existing ? 'Editar' : 'Nueva') + ' cuenta digital', `
     <div class="form-group">
       <label class="form-label">Nombre de la cuenta *</label>
@@ -2705,11 +3318,44 @@ function openCuentaForm(existing) {
       <label class="form-label">Entidad (opcional)</label>
       <input class="form-input" type="text" id="cf-entidad" placeholder="Ej: Bancolombia" value="${esc(c.entidad || '')}">
     </div>
+    <div class="form-group">
+      <label class="form-label">Modalidad *</label>
+      <div class="tab-switcher">
+        <div class="tab-switch-btn ${tipoActual==='debito'?'active':''}" id="cf-debito" onclick="switchCuentaTipo('debito')">💵 Débito (plata tuya)</div>
+        <div class="tab-switch-btn ${tipoActual==='credito'?'active':''}" id="cf-credito" onclick="switchCuentaTipo('credito')">💳 Crédito (plata prestada)</div>
+      </div>
+      ${!tipoActual ? '<div style="font-size:.75rem;color:var(--warn);margin-top:.35rem">Sin modalidad: tus cuentas viejas empiezan así. Elígela para activar su lógica.</div>' : ''}
+    </div>
+    <div id="cf-credito-fields" style="display:${tipoActual==='credito'?'block':'none'}">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Día de corte *</label>
+          <input class="form-input" type="number" id="cf-corte" value="${c.diaCorte || 1}" min="1" max="31">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Día límite de pago *</label>
+          <input class="form-input" type="number" id="cf-pago" value="${c.diaPago || 10}" min="1" max="31">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cupo total (opcional)</label>
+        <input class="form-input" type="text" inputmode="numeric" data-money id="cf-cupo"
+               placeholder="$ 0" value="${c.cupo ? fmtInput(c.cupo) : ''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cf-diasoro">🌟 Días oro</label>
+        <input class="form-input" type="number" id="cf-diasoro" value="${diasOroDe(c)}" min="1" max="${DIAS_ORO_MAX}" step="1">
+        <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+          Cuántos días después del corte te avisa "¡Estás en días oro!" (1 a ${DIAS_ORO_MAX}).
+          1 = solo el día siguiente al corte, el de más plazo. Más días = la ventana dura más, con un poco menos de plazo cada día.
+        </div>
+      </div>
+    </div>
     ${existing ? '' : `
     <div class="form-group">
-      <label class="form-label">Saldo inicial (opcional)</label>
+      <label class="form-label" id="cf-saldo-label">Saldo inicial (opcional)</label>
       <input class="form-input" type="text" inputmode="numeric" data-money id="cf-saldo" placeholder="$ 0">
-      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem" id="cf-saldo-nota">
         Se registra como una conciliación inicial para fijar el saldo de la cuenta.
       </div>
     </div>`}
@@ -2717,6 +3363,21 @@ function openCuentaForm(existing) {
       ${existing ? 'Guardar cambios' : 'Crear cuenta'}
     </button>
   `);
+}
+
+let _cuentaTipoSel = 'debito';
+function switchCuentaTipo(tipo) {
+  _cuentaTipoSel = tipo;
+  document.getElementById('cf-debito').classList.toggle('active', tipo === 'debito');
+  document.getElementById('cf-credito').classList.toggle('active', tipo === 'credito');
+  const f = document.getElementById('cf-credito-fields');
+  if (f) f.style.display = tipo === 'credito' ? 'block' : 'none';
+  const lbl = document.getElementById('cf-saldo-label');
+  if (lbl) lbl.textContent = tipo === 'credito' ? 'Deuda inicial (opcional)' : 'Saldo inicial (opcional)';
+  const nota = document.getElementById('cf-saldo-nota');
+  if (nota) nota.textContent = tipo === 'credito'
+    ? 'Se registra como deuda inicial (lo que debes hoy según el extracto).'
+    : 'Se registra como una conciliación inicial para fijar el saldo de la cuenta.';
 }
 
 async function saveCuentaForm(existingId) {
@@ -2727,8 +3388,31 @@ async function saveCuentaForm(existingId) {
   const cuenta = {
     id: existingId || uid(),
     name, entidad,
+    // La modalidad se puede cambiar cuando quieras: los saldos se
+    // reinterpretan solos (débito suma, crédito resta como deuda).
+    tipo: _cuentaTipoSel === 'credito' ? 'credito' : 'debito',
+    diaCorte: 1, diaPago: 10, cupo: 0,
     createdAt: existingId ? undefined : Date.now()
   };
+  if (cuenta.tipo === 'credito') {
+    const dc = parseInt((document.getElementById('cf-corte') || {}).value);
+    const dp = parseInt((document.getElementById('cf-pago') || {}).value);
+    if (!Number.isFinite(dc) || dc < 1 || dc > 31) { showToast('⚠ Día de corte entre 1 y 31'); return; }
+    if (!Number.isFinite(dp) || dp < 1 || dp > 31) { showToast('⚠ Día de pago entre 1 y 31'); return; }
+    const dOro = parseInt((document.getElementById('cf-diasoro') || {}).value);
+    if (!Number.isFinite(dOro) || dOro < 1 || dOro > DIAS_ORO_MAX) { showToast('⚠ Días oro entre 1 y ' + DIAS_ORO_MAX); return; }
+    cuenta.diaCorte = dc; cuenta.diaPago = dp;
+    cuenta.cupo = moneyVal('cf-cupo');
+    cuenta.diasOro = dOro;
+  } else if (existingId) {
+    // Al pasar a débito se conservan los datos de crédito por si vuelve.
+    const prev = cuentas.find(x => x.id === existingId) || {};
+    cuenta.diaCorte = prev.diaCorte || 1; cuenta.diaPago = prev.diaPago || 10; cuenta.cupo = prev.cupo || 0;
+    cuenta.diasOro = diasOroDe(prev);
+  }
+  if (existingId && _cuentaTipoSel !== ((cuentas.find(x => x.id === existingId) || {}).tipo || '')) {
+    setTimeout(() => showToast('🔄 Modalidad cambiada: los saldos se reinterpretan (débito suma, crédito resta)'), 350);
+  }
   if (!tomarCandado()) return;
   try {
     if (existingId) {
@@ -2887,9 +3571,9 @@ function openPatrimonioForm(existing, defaultKind) {
   const p = existing || { name: '', amount: '', category: cats[0], notes: '', kind };
   _patKind = kind;
   _patIsNew = !existing;
-  const epsDes = trasladoEndpoints();
+  const epsDes = endpointsDinero();
   const optsDes = `<option value="">— Sin desembolso (la plata ya entró antes) —</option>` +
-    epsDes.map(e => `<option value="${e.id}">${esc(e.label)} · ${fmt(endpointBookBalance(e.id))}</option>`).join('');
+    epsDes.map(e => opcionEndpointHTML(e)).join('');
   openModal((existing ? 'Editar' : 'Nuevo') + ' registro de patrimonio', `
     <div class="form-group">
       <label class="form-label">Tipo *</label>
@@ -3326,9 +4010,9 @@ function openPrestamoForm(existing) {
     name: '', entidad: '', initialAmount: '', cuota: '',
     totalCuotas: 12, diaPago: 10, startDate: todayISO(), tasa: '', notes: ''
   };
-  const eps = trasladoEndpoints();
+  const eps = endpointsDinero();
   const opts = sel => `<option value="">— Sin desembolso (ya recibí la plata) —</option>` +
-    eps.map(e => `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.label)} · ${fmt(endpointBookBalance(e.id))}</option>`).join('');
+    eps.map(e => opcionEndpointHTML(e, sel)).join('');
   openModal((esEdicion ? 'Editar' : 'Nuevo') + ' préstamo', `
     <div class="form-group">
       <label class="form-label">Nombre del préstamo *</label>
@@ -3421,6 +4105,7 @@ async function savePrestamoForm(existingId) {
     if (!existingId) {
       const sel = document.getElementById('pr-desembolso');
       const ep = sel ? sel.value : '';
+      if (esEndpointCredito(ep)) { showToast('⚠ El desembolso debe llegar a efectivo o a una cuenta débito'); return; }
       const acc = ep ? endpointTxAccount(ep) : null;
       if (ep && acc) {
         const tx = {
@@ -3462,8 +4147,8 @@ function openPagoPrestamoModal(id) {
   const saldo = prestamoSaldo(p);
   if (saldo <= 0) { showToast('✓ Préstamo saldado'); return; }
   const sugerida = prestamoCuotaSugerida(p);
-  const eps = trasladoEndpoints();
-  const opts = eps.map(e => `<option value="${e.id}">${esc(e.label)} · ${fmt(endpointBookBalance(e.id))}</option>`).join('');
+  const eps = endpointsDinero();
+  const opts = eps.map(e => opcionEndpointHTML(e)).join('');
   openModal('Pagar cuota', `
     <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
       <div style="font-weight:600;font-size:.95rem">🏦 ${esc(p.name)}</div>
@@ -3551,6 +4236,7 @@ async function registrarPagoPrestamo(id) {
   const interes = Math.max(0, Math.min(moneyVal('pp-interes'), monto));
   const capital = monto - interes;
   const from = document.getElementById('pp-from').value;
+  if (esEndpointCredito(from)) { showToast('⚠ Paga la cuota desde efectivo o una cuenta débito'); return; }
   const fecha = document.getElementById('pp-fecha').value || todayISO();
   const descontar = document.getElementById('pp-descontar').checked;
   const errMonto = validarMonto(monto);
@@ -3621,7 +4307,7 @@ function openTablaPrestamo(id) {
   }
   const filasPagos = pagos.length ? pagos.map((x, i) => `
     <div class="recon-item">
-      <div class="ri-icon" style="background:rgba(75,218,142,.13);color:var(--ok)">✓</div>
+      <div class="ri-icon" style="background:color-mix(in srgb,var(--ok) 13%,transparent);color:var(--ok)">✓</div>
       <div class="ri-info">
         <div class="ri-main">Cuota ${i + 1} · ${fechaCorta(x.fecha)}</div>
         <div class="ri-sub">Capital ${fmt(pagoCapital(x))} + interés ${fmt(pagoInteres(x))} · ${x.metodo === 'digital' ? esc(cuentaName(x.cuentaId) || 'Digital') : 'Efectivo'}${x.sinMovimiento ? ' · sin movimiento' : ''}</div>
@@ -3727,7 +4413,7 @@ function renderConciliacion() {
     <div class="recon-item">
       <div class="ri-icon">${b.account === 'efectivo' ? '💵' : '💳'}</div>
       <div class="ri-info">
-        <div class="ri-main">${ACCOUNT_LABELS[b.account]}${b.cuentaId ? ' · ' + esc(cuentaName(b.cuentaId)) : ''} · ${dateStr}</div>
+        <div class="ri-main">${ACCOUNT_LABELS[b.account]}${b.cuentaId ? ' · ' + esc(cuentaName(b.cuentaId)) + (cuentaTipo(b.cuentaId) === 'credito' ? ' (crédito)' : '') : ''} · ${dateStr}</div>
         <div class="ri-sub">${fmt(b.previousAmount)} → ${fmt(b.amount)}${b.notes ? ' · ' + esc(b.notes) : ''}</div>
       </div>
       <div class="ri-diff" style="color:${color}">${sign}${fmt(b.diff)}</div>
@@ -3755,7 +4441,7 @@ function renderTrasladosList() {
     const dateStr = d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
     return `
     <div class="recon-item">
-      <div class="ri-icon" style="background:rgba(200,245,96,.2);color:#5a7a10">⇄</div>
+      <div class="ri-icon" style="background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent-text)">⇄</div>
       <div class="ri-info">
         <div class="ri-main">${esc(endpointLabel(tr.from))} → ${esc(endpointLabel(tr.to))} · ${dateStr}</div>
         <div class="ri-sub">${tr.notes ? esc(tr.notes) : 'Traspaso interno (no suma ni resta al total)'}</div>
@@ -3772,6 +4458,13 @@ function renderTrasladosList() {
 }
 
 async function confirmDeleteTraslado(id) {
+  const tr = traslados.find(x => x.id === id);
+  if (tr) {
+    const destino = tr.to === 'transfer' || tr.to === 'efectivo' ? tr.to
+      : (tr.to.indexOf('cuenta:') === 0 && cuentaTipo(tr.to.slice(7)) !== 'credito' ? tr.to : null);
+    const errSaldo = validarSalida(destino, Number(tr.amount) || 0);
+    if (errSaldo) { showToast(errSaldo.replace('⚠ Saldo', '⚠ No puedes eliminar este traslado: saldo')); return; }
+  }
   if (!(await appConfirm('¿Eliminar este traslado? Los saldos volverán a calcularse sin ese movimiento.'))) return;
   try {
     await deleteTraslado(id);
@@ -3784,6 +4477,11 @@ async function confirmDeleteTraslado(id) {
 }
 
 async function confirmDeleteReconciliation(id) {
+  const rec = balances.find(x => x.id === id);
+  if (rec && Number(rec.diff) > 0) {
+    const errSaldo = validarSalida(bolsilloDe(rec.account, rec.cuentaId), Number(rec.diff));
+    if (errSaldo) { showToast(errSaldo.replace('⚠ Saldo', '⚠ No puedes eliminar esta conciliación: saldo')); return; }
+  }
   if (!(await appConfirm('¿Eliminar este registro de conciliación? Esta acción no se puede deshacer.'))) return;
   try {
     await deleteBalanceRecord(id);
@@ -3796,9 +4494,612 @@ async function confirmDeleteReconciliation(id) {
 }
 
 /* ─────────────────────────────────────────────────────────
+   SALDO SUFICIENTE (sentido común financiero)
+   El efectivo y las cuentas débito son dinero que existe: no pueden
+   quedar en negativo. Toda operación que los dejaría bajo cero se
+   bloquea con un aviso. Las tarjetas de crédito sí bajan de cero:
+   ese "negativo" es deuda, y para eso tienen cupo.
+   Bolsillos: 'efectivo' · 'cuenta:<id>' (débito) · 'transfer'
+   (digital sin cuenta: se mira el total digital débito, porque esa
+   plata puede estar en cualquiera de tus cuentas).
+───────────────────────────────────────────────────────── */
+function bolsilloDe(account, cuentaId) {
+  if (account === 'efectivo') return 'efectivo';
+  if (account !== 'transfer') return null;
+  if (cuentaId && cuentaTipo(cuentaId) === 'credito') return null;   // deuda: no aplica
+  return cuentaId ? 'cuenta:' + cuentaId : 'transfer';
+}
+
+function disponibleEn(bolsillo) {
+  if (bolsillo === 'transfer') return accountTotals().digital + creditoDeudaTotal();
+  return Number(endpointBookBalance(bolsillo)) || 0;
+}
+
+function nombreBolsillo(b) {
+  return b === 'transfer' ? 'tus cuentas digitales' : endpointLabel(b);
+}
+
+// Efecto de un movimiento sobre un bolsillo: + entra, − sale.
+function efectoEn(tx, b) {
+  if (!tx || bolsilloDe(tx.account, tx.cuentaId) !== b) return 0;
+  const m = Number(tx.amount) || 0;
+  if (tx.type === 'income') return m;
+  if (tx.type === 'expense' || tx.type === 'saving') return -m;
+  return 0;
+}
+
+/* Valida reemplazar el movimiento `viejo` por `nuevo` (crear: viejo
+   null; eliminar: nuevo null). Solo se revisan los bolsillos cuyo
+   saldo BAJA: si ya estaba en negativo, una corrección que lo mejora
+   no se bloquea. Devuelve el mensaje de error o ''. */
+function validarSaldoMovimiento(nuevo, viejo) {
+  const bols = new Set([nuevo && bolsilloDe(nuevo.account, nuevo.cuentaId),
+                        viejo && bolsilloDe(viejo.account, viejo.cuentaId)]);
+  for (const b of bols) {
+    if (!b) continue;
+    const delta = efectoEn(nuevo, b) - efectoEn(viejo, b);
+    if (delta >= 0) continue;
+    const disp = disponibleEn(b);
+    const queda = disp + delta;
+    if (queda < 0) {
+      const sinEste = Math.max(0, disp - efectoEn(viejo, b));
+      return `⚠ Saldo insuficiente en ${nombreBolsillo(b)}: quedaría en −${fmt(-queda)}` +
+        (nuevo ? `. Disponible: ${fmt(sinEste)}` : '');
+    }
+  }
+
+  // Tarjeta de crédito: no se puede comprar por encima del cupo.
+  const credDe = tx => (tx && tx.account === 'transfer' && tx.cuentaId && cuentaTipo(tx.cuentaId) === 'credito') ? tx.cuentaId : null;
+  for (const id of new Set([credDe(nuevo), credDe(viejo)])) {
+    if (!id) continue;
+    const c = cuentas.find(x => x.id === id);
+    const cupo = Number(c && c.cupo) || 0;
+    if (cupo <= 0) continue;                       // sin cupo registrado no se limita
+    // + = más deuda (compras); − = menos deuda (abonos/ingresos).
+    const deudaDe = tx => {
+      if (!tx || tx.account !== 'transfer' || tx.cuentaId !== id) return 0;
+      const m = Number(tx.amount) || 0;
+      return tx.type === 'income' ? -m : ((tx.type === 'expense' || tx.type === 'saving') ? m : 0);
+    };
+    const delta = deudaDe(nuevo) - deudaDe(viejo);
+    if (delta <= 0) continue;
+    const deuda = cuentaDeuda(id);
+    if (deuda + delta > cupo) {
+      const libre = Math.max(0, cupo - (deuda - deudaDe(viejo)));
+      return `⚠ Cupo insuficiente en ${c.name}: te quedan ${fmt(libre)} de ${fmt(cupo)}`;
+    }
+  }
+  return '';
+}
+
+// Para ajustes que no son transacciones (traslados, conciliaciones).
+function validarSalida(bolsillo, monto) {
+  if (!bolsillo || !(monto > 0)) return '';
+  const disp = disponibleEn(bolsillo);
+  if (disp - monto < 0) {
+    return `⚠ Saldo insuficiente en ${nombreBolsillo(bolsillo)}: quedaría en −${fmt(monto - disp)}`;
+  }
+  return '';
+}
+
+// Bolsillos que HOY están en negativo (datos viejos o registros que faltan).
+function bolsillosNegativos() {
+  const out = [];
+  const cash = disponibleEn('efectivo');
+  if (Math.round(cash) < 0) out.push({ b: 'efectivo', saldo: cash, account: 'efectivo', cuentaId: '' });
+  cuentas.forEach(c => {
+    if (cuentaTipo(c.id) === 'credito') return;
+    const v = cuentaBalance(c.id);
+    if (Math.round(v) < 0) out.push({ b: 'cuenta:' + c.id, saldo: v, account: 'transfer', cuentaId: c.id });
+  });
+  const dig = disponibleEn('transfer');
+  if (Math.round(dig) < 0 && !out.some(x => x.account === 'transfer')) {
+    out.push({ b: 'transfer', saldo: dig, account: 'transfer', cuentaId: '' });
+  }
+  return out;
+}
+
+function renderAvisoNegativos() {
+  const el = document.getElementById('dash-negativos');
+  const negs = bolsillosNegativos();
+  if (!negs.length) { el.innerHTML = ''; return; }
+  el.innerHTML = negs.map((n, i) => `
+    <div class="ant-alert alerta-negativo" style="margin-bottom:.6rem;cursor:pointer" data-neg="${i}" role="button" tabindex="0">
+      <div class="ant-icon">⚠️</div>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:.85rem">Saldo negativo en ${esc(nombreBolsillo(n.b))}: ${fmt(n.saldo)}</div>
+        <div style="font-size:.78rem;color:var(--text2)">No puedes tener dinero en negativo: falta registrar un ingreso o hay un gasto de más. <strong>Toca para conciliar con tu saldo real.</strong></div>
+      </div>
+    </div>`).join('');
+  el.querySelectorAll('[data-neg]').forEach(a => {
+    const n = negs[+a.dataset.neg];
+    a.onclick = () => openReconciliationModal(n.account, n.cuentaId || undefined);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────
+   PRESUPUESTOS POR CATEGORÍA
+   Tope mensual de gasto por categoría. El avance son los gastos
+   del mes seleccionado en esa categoría (compras con tarjeta de
+   crédito incluidas: también son gasto). Alerta al 80 % y al 100 %.
+───────────────────────────────────────────────────────── */
+const PRESUP_AVISO = 0.8;
+
+async function savePresupuesto(item) {
+  await dbPut('presupuestos', item);
+  const idx = presupuestos.findIndex(x => x.id === item.id);
+  if (idx >= 0) presupuestos[idx] = item; else presupuestos.push(item);
+}
+
+async function deletePresupuesto(id) {
+  await dbDelete('presupuestos', id);
+  presupuestos = presupuestos.filter(x => x.id !== id);
+}
+
+// Gasto por categoría en un mes, en una sola pasada. excluirId deja
+// fuera un movimiento (el que se está editando).
+function gastoPorCategoria(month, year, excluirId) {
+  const m = new Map();
+  for (let i = 0; i < transactions.length; i++) {
+    const t = transactions[i];
+    if (t.type !== 'expense' || t.id === excluirId || !isSameMonth(t.date, month, year)) continue;
+    m.set(t.category, (m.get(t.category) || 0) + (Number(t.amount) || 0));
+  }
+  return m;
+}
+
+function estadoPresupuesto(gastado, monto) {
+  const pct = monto > 0 ? gastado / monto : 0;
+  if (pct >= 1) return 'excedido';
+  if (pct >= PRESUP_AVISO) return 'alerta';
+  return 'ok';
+}
+
+// Filas listas para pintar, la más consumida primero.
+function presupuestosDelMes(month, year) {
+  const gastos = gastoPorCategoria(month, year);
+  return presupuestos.map(p => {
+    const monto = Number(p.monto) || 0;
+    const gastado = gastos.get(p.category) || 0;
+    return {
+      id: p.id, category: p.category, monto, gastado,
+      pct: monto > 0 ? gastado / monto : 0,
+      estado: estadoPresupuesto(gastado, monto)
+    };
+  }).sort((a, b) => b.pct - a.pct);
+}
+
+function presupuestoFilaHTML(r, conAcciones) {
+  const color = r.estado === 'excedido' ? 'red' : (r.estado === 'alerta' ? 'yellow' : 'green');
+  const resto = r.monto - r.gastado;
+  const detalle = resto >= 0
+    ? `Te quedan ${fmt(resto)}`
+    : `<span style="color:var(--danger-text);font-weight:600">Te pasaste ${fmt(-resto)}</span>`;
+  const badge = r.estado === 'excedido' ? '<span class="badge overdue">Superado</span>'
+    : (r.estado === 'alerta' ? '<span class="badge unpaid">80 %+</span>' : '');
+  const acciones = conAcciones ? `
+        <span class="tx-actions">
+          <button class="tx-btn edit" data-presup="${esc(r.id)}" title="Editar" aria-label="Editar presupuesto de ${esc(r.category)}">✏️</button>
+          <button class="tx-btn del" data-presup="${esc(r.id)}" title="Eliminar" aria-label="Eliminar presupuesto de ${esc(r.category)}">🗑</button>
+        </span>` : '';
+  return `
+    <div class="rule-row">
+      <div class="rule-labels" style="align-items:center;gap:.5rem">
+        <span style="display:flex;align-items:center;gap:.4rem;min-width:0">${esc(r.category)} ${badge}</span>
+        <strong style="white-space:nowrap">${fmt(r.gastado)} / ${fmt(r.monto)}</strong>
+      </div>
+      <div class="prog-bar"><div class="prog-fill ${color}" style="width:${Math.min(100, Math.round(r.pct * 100))}%"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;font-size:.75rem;color:var(--text2)">
+        <span>${Math.round(r.pct * 100)} % usado · ${detalle}</span>${acciones}
+      </div>
+    </div>`;
+}
+
+function renderPresupuestos() {
+  document.getElementById('presup-mes').textContent = MONTHS_ES[currentMonth] + ' ' + currentYear;
+  const el = document.getElementById('presup-list');
+  if (!presupuestos.length) {
+    el.innerHTML = `
+      <p class="muted" style="margin-bottom:.75rem">Ponle un tope mensual a tus categorías de gasto (comida, transporte…). Kasa te avisa al llegar al 80 % y al pasarte.</p>
+      <button class="btn-primary" id="presup-crear">＋ Crear presupuesto</button>`;
+    document.getElementById('presup-crear').onclick = () => openPresupuestoForm();
+    return;
+  }
+  const filas = presupuestosDelMes(currentMonth, currentYear);
+  const totMonto = filas.reduce((s, r) => s + r.monto, 0);
+  const totGastado = filas.reduce((s, r) => s + r.gastado, 0);
+  el.innerHTML = filas.map(r => presupuestoFilaHTML(r, true)).join('') + `
+    <div class="rule-labels" style="margin-top:.75rem;padding-top:.6rem;border-top:1px solid var(--border)">
+      <span>Total presupuestado</span><strong>${fmt(totGastado)} / ${fmt(totMonto)}</strong>
+    </div>`;
+  el.querySelectorAll('.tx-btn.edit[data-presup]').forEach(b => {
+    b.onclick = () => openPresupuestoForm(presupuestos.find(p => p.id === b.dataset.presup));
+  });
+  el.querySelectorAll('.tx-btn.del[data-presup]').forEach(b => {
+    b.onclick = () => confirmDeletePresupuesto(b.dataset.presup);
+  });
+}
+
+// Tarjeta del Dashboard: solo los presupuestos en 80 % o más.
+function renderAlertasPresupuesto() {
+  const card = document.getElementById('dash-presup-card');
+  const filas = presupuestosDelMes(currentMonth, currentYear).filter(r => r.estado !== 'ok');
+  if (!filas.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('dash-presup-list').innerHTML = filas.slice(0, 4).map(r => presupuestoFilaHTML(r, false)).join('');
+}
+
+// Categorías de gasto más las que ya existen en movimientos (ej. "Pago de préstamo").
+function categoriasPresupuestables() {
+  const set = new Set(EXPENSE_CATS);
+  transactions.forEach(t => { if (t.type === 'expense' && t.category) set.add(t.category); });
+  return [...set];
+}
+
+// Promedio mensual de los 3 meses anteriores al seleccionado: referencia
+// para elegir un tope realista.
+function promedioGastoCategoria(cat) {
+  let suma = 0;
+  for (let k = 1; k <= 3; k++) {
+    const d = new Date(currentYear, currentMonth - k, 1);
+    suma += gastoPorCategoria(d.getMonth(), d.getFullYear()).get(cat) || 0;
+  }
+  return Math.round(suma / 3);
+}
+
+function openPresupuestoForm(existing) {
+  const usadas = new Set(presupuestos.filter(p => !existing || p.id !== existing.id).map(p => p.category));
+  const cats = categoriasPresupuestables().filter(c => !usadas.has(c));
+  if (!cats.length) { showToast('Ya tienes presupuesto en todas las categorías'); return; }
+  const actual = existing ? existing.category : cats[0];
+  openModal((existing ? 'Editar' : 'Nuevo') + ' presupuesto', `
+    <div class="form-group">
+      <label class="form-label" for="pp-cat">Categoría *</label>
+      <select class="form-input" id="pp-cat">
+        ${cats.map(c => `<option value="${esc(c)}" ${c === actual ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="pp-monto">Tope mensual *</label>
+      <input class="form-input" type="text" inputmode="numeric" data-money id="pp-monto"
+             placeholder="$ 0" value="${existing ? fmtInput(existing.monto) : ''}">
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem" id="pp-sugerencia"></div>
+    </div>
+    <button class="btn-primary" id="pp-guardar">${existing ? 'Guardar cambios' : 'Crear presupuesto'}</button>
+  `);
+  const sel = document.getElementById('pp-cat');
+  const sugerir = () => {
+    const prom = promedioGastoCategoria(sel.value);
+    document.getElementById('pp-sugerencia').textContent = prom > 0
+      ? `En los últimos 3 meses gastaste en promedio ${fmt(prom)} al mes en esta categoría.`
+      : 'Sin gastos en esta categoría en los últimos 3 meses.';
+  };
+  sel.onchange = sugerir;
+  sugerir();
+  document.getElementById('pp-guardar').onclick = () => savePresupuestoForm(existing ? existing.id : '');
+}
+
+async function savePresupuestoForm(existingId) {
+  const category = document.getElementById('pp-cat').value;
+  const monto = moneyVal('pp-monto');
+  const errMonto = validarMonto(monto);
+  if (errMonto) { showToast(errMonto); return; }
+  if (presupuestos.some(p => p.category === category && p.id !== existingId)) {
+    showToast('⚠ Esa categoría ya tiene presupuesto'); return;
+  }
+  if (!tomarCandado()) return;
+  try {
+    await savePresupuesto({ id: existingId || uid(), category, monto });
+    closeModal();
+    showToast(existingId ? '✏️ Presupuesto actualizado' : '✅ Presupuesto creado');
+    renderPage(currentPage);
+  } catch (e) {
+    reportarError('guardar presupuesto', e);
+    showToast('❌ No se pudo guardar. Intenta de nuevo.');
+  } finally { soltarCandado(); }
+}
+
+async function confirmDeletePresupuesto(id) {
+  const p = presupuestos.find(x => x.id === id);
+  if (!p) return;
+  if (!(await appConfirm(`¿Eliminar el presupuesto de ${esc(p.category)}? Tus gastos no se borran.`))) return;
+  try {
+    await deletePresupuesto(id);
+    showToast('🗑 Presupuesto eliminado');
+    renderPage(currentPage);
+  } catch (e) {
+    reportarError('eliminar presupuesto', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
+}
+
+// Aviso al guardar un gasto que cruza el 80 % o el 100 % del tope del
+// mes de ese gasto. Devuelve el mensaje o ''.
+function avisoPresupuesto(tx) {
+  if (tx.type !== 'expense') return '';
+  const p = presupuestos.find(x => x.category === tx.category);
+  if (!p || !(p.monto > 0)) return '';
+  const d = parseLocalDate(tx.date);
+  const antes = gastoPorCategoria(d.getMonth(), d.getFullYear(), tx.id).get(tx.category) || 0;
+  const despues = antes + tx.amount;
+  if (despues >= p.monto && antes < p.monto) {
+    return `🔴 Superaste el presupuesto de ${tx.category} por ${fmt(despues - p.monto)}`;
+  }
+  if (despues >= p.monto * PRESUP_AVISO && antes < p.monto * PRESUP_AVISO) {
+    return `🟡 Llevas el ${Math.round(despues / p.monto * 100)} % del presupuesto de ${tx.category}`;
+  }
+  return '';
+}
+
+/* ─────────────────────────────────────────────────────────
+   METAS DE AHORRO
+   Cada meta tiene objetivo y fecha límite opcional. Su avance es
+   la suma de los ahorros (transacciones 'saving') con su metaId,
+   así un aporte también cuenta en Total Ahorrado y en el Balance.
+───────────────────────────────────────────────────────── */
+let _metaPreseleccion = '';   // meta elegida al tocar "Aportar"
+
+async function saveMeta(item) {
+  await dbPut('metas', item);
+  const idx = metas.findIndex(x => x.id === item.id);
+  if (idx >= 0) metas[idx] = item; else metas.push(item);
+}
+
+async function deleteMeta(id) {
+  await dbDelete('metas', id);
+  metas = metas.filter(x => x.id !== id);
+}
+
+function metaName(id) {
+  const m = metas.find(x => x.id === id);
+  return m ? m.name : 'Meta eliminada';
+}
+
+function metaAhorrado(id) {
+  let s = 0;
+  for (let i = 0; i < transactions.length; i++) {
+    const t = transactions[i];
+    if (t.type === 'saving' && t.metaId === id) s += Number(t.amount) || 0;
+  }
+  return s;
+}
+
+// Meses para ahorrar contando el actual: de hoy (8 oct) al 31 dic = 3.
+// 0 si la fecha ya pasó.
+function mesesHastaFecha(fechaISO) {
+  const d = parseLocalDate(fechaISO);
+  if (isNaN(d.getTime())) return null;
+  const h = hoyLocal();
+  if (d < h) return 0;
+  return (d.getFullYear() - h.getFullYear()) * 12 + (d.getMonth() - h.getMonth()) + 1;
+}
+
+function metaOptionsHTML(selectedId) {
+  return `<option value="">— Ninguna —</option>` + metas.map(m =>
+    `<option value="${esc(m.id)}" ${m.id === selectedId ? 'selected' : ''}>${esc(m.name)}</option>`
+  ).join('');
+}
+
+function renderMetas() {
+  const el = document.getElementById('metas-list');
+  if (!metas.length) {
+    el.innerHTML = `<div class="empty" style="padding:1rem"><div class="e-icon">🎯</div>Crea una meta (ej: Viaje, $3.000.000 para diciembre) y Kasa te dice cuánto apartar cada mes.</div>`;
+    return;
+  }
+  el.innerHTML = metas.map(m => {
+    const objetivo = Number(m.objetivo) || 0;
+    const ahorrado = metaAhorrado(m.id);
+    const pct = objetivo > 0 ? Math.min(1, ahorrado / objetivo) : 0;
+    const falta = Math.max(0, objetivo - ahorrado);
+    let estado, badge = '';
+    if (falta <= 0) {
+      estado = '🎉 ¡Meta cumplida!';
+      badge = '<span class="badge paid">Cumplida</span>';
+    } else if (m.fecha) {
+      const meses = mesesHastaFecha(m.fecha);
+      const hasta = parseLocalDate(m.fecha);
+      const hastaTxt = MONTHS_ES[hasta.getMonth()].toLowerCase() + ' ' + hasta.getFullYear();
+      if (meses === 0) {
+        estado = `La fecha ya pasó · faltan ${fmt(falta)}`;
+        badge = '<span class="badge overdue">Vencida</span>';
+      } else {
+        estado = `Aparta <strong>${fmt(Math.ceil(falta / meses))}</strong> al mes · ${meses} ${meses === 1 ? 'mes' : 'meses'} (hasta ${hastaTxt})`;
+        badge = `<span class="badge unpaid">${fechaCorta(m.fecha)}</span>`;
+      }
+    } else {
+      estado = `Faltan ${fmt(falta)} · sin fecha límite`;
+    }
+    return `
+      <div class="card card-sm" style="margin-bottom:.6rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
+          <div style="font-weight:600;font-size:.92rem;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(m.name)}</div>
+          ${badge}
+        </div>
+        <div class="rule-labels" style="margin-top:.5rem">
+          <span>${fmt(ahorrado)} de ${fmt(objetivo)}</span><strong>${Math.round(pct * 100)} %</strong>
+        </div>
+        <div class="prog-bar"><div class="prog-fill green" style="width:${Math.round(pct * 100)}%"></div></div>
+        <div style="font-size:.78rem;color:var(--text2);margin-bottom:.6rem">${estado}</div>
+        <div style="display:flex;gap:.4rem;align-items:center">
+          <button class="btn-primary" data-aportar="${esc(m.id)}" style="flex:1;padding:.55rem;font-size:.85rem">＋ Aportar</button>
+          <button class="tx-btn edit" data-meta="${esc(m.id)}" title="Editar" aria-label="Editar meta ${esc(m.name)}">✏️</button>
+          <button class="tx-btn del" data-meta="${esc(m.id)}" title="Eliminar" aria-label="Eliminar meta ${esc(m.name)}">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+  el.querySelectorAll('[data-aportar]').forEach(b => {
+    b.onclick = () => {
+      _typeSelected = 'saving'; _accountSelected = 'efectivo';
+      _metaPreseleccion = b.dataset.aportar;
+      openTxForm('saving');
+    };
+  });
+  el.querySelectorAll('.tx-btn.edit[data-meta]').forEach(b => {
+    b.onclick = () => openMetaForm(metas.find(m => m.id === b.dataset.meta));
+  });
+  el.querySelectorAll('.tx-btn.del[data-meta]').forEach(b => {
+    b.onclick = () => confirmDeleteMeta(b.dataset.meta);
+  });
+}
+
+function openMetaForm(existing) {
+  const m = existing || { name: '', objetivo: '', fecha: '' };
+  openModal((existing ? 'Editar' : 'Nueva') + ' meta de ahorro', `
+    <div class="form-group">
+      <label class="form-label" for="mt-name">Nombre *</label>
+      <input class="form-input" type="text" id="mt-name" maxlength="60" placeholder="Viaje a Cartagena" value="${esc(m.name)}">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" for="mt-objetivo">Objetivo *</label>
+        <input class="form-input" type="text" inputmode="numeric" data-money id="mt-objetivo"
+               placeholder="$ 0" value="${m.objetivo ? fmtInput(m.objetivo) : ''}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="mt-fecha">Fecha límite</label>
+        <input class="form-input" type="date" id="mt-fecha" value="${esc(m.fecha || '')}" min="2000-01-01" max="2100-12-31">
+      </div>
+    </div>
+    <div style="font-size:.75rem;color:var(--text2);margin-bottom:.75rem">
+      Con fecha, Kasa calcula cuánto apartar cada mes. Los aportes se registran como ahorros asignados a la meta.
+    </div>
+    <button class="btn-primary" id="mt-guardar">${existing ? 'Guardar cambios' : 'Crear meta'}</button>
+  `);
+  document.getElementById('mt-guardar').onclick = () => saveMetaForm(existing ? existing.id : '');
+}
+
+async function saveMetaForm(existingId) {
+  const name = document.getElementById('mt-name').value.trim();
+  const objetivo = moneyVal('mt-objetivo');
+  const fecha = document.getElementById('mt-fecha').value;
+  if (!name) { showToast('⚠ Ingresa un nombre'); return; }
+  const errMonto = validarMonto(objetivo);
+  if (errMonto) { showToast(errMonto); return; }
+  if (fecha) {
+    const errFecha = validarFecha(fecha);
+    if (errFecha) { showToast(errFecha); return; }
+  }
+  const previo = existingId ? metas.find(x => x.id === existingId) : null;
+  if (!tomarCandado()) return;
+  try {
+    await saveMeta({ id: existingId || uid(), name, objetivo, fecha: fecha || '',
+                     createdAt: (previo && previo.createdAt) || Date.now() });
+    closeModal();
+    showToast(existingId ? '✏️ Meta actualizada' : '🎯 Meta creada');
+    renderPage(currentPage);
+  } catch (e) {
+    reportarError('guardar meta', e);
+    showToast('❌ No se pudo guardar. Intenta de nuevo.');
+  } finally { soltarCandado(); }
+}
+
+async function confirmDeleteMeta(id) {
+  const m = metas.find(x => x.id === id);
+  if (!m) return;
+  if (!(await appConfirm(`¿Eliminar la meta "${esc(m.name)}"? Los ahorros que aportaste se conservan, solo quedan sin meta.`))) return;
+  try {
+    await deleteMeta(id);
+    // Los aportes siguen siendo ahorro: solo se les quita la referencia.
+    const ligados = transactions.filter(t => t.metaId === id);
+    for (const t of ligados) {
+      const copia = Object.assign({}, t);
+      delete copia.metaId;
+      await saveTransaction(copia);
+    }
+    showToast('🗑 Meta eliminada');
+    renderPage(currentPage);
+  } catch (e) {
+    reportarError('eliminar meta', e);
+    showToast('❌ No se pudo eliminar. Intenta de nuevo.');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   PRÓXIMOS PAGOS (Dashboard)
+   Junta en una lista lo que vence en los próximos 7 días (y lo ya
+   vencido): gastos fijos sin pagar, cuotas de préstamos y tarjetas
+   de crédito con deuda. Toca una fila para ir a su sección.
+───────────────────────────────────────────────────────── */
+const PAGOS_VENTANA = 7;
+
+function proximosPagos() {
+  const items = [];
+  fijos.forEach(f => {
+    if (estadoFijo(f) === 'pagado') return;
+    const fecha = proximoVencimiento(f);
+    const dias = diasRestantes(fecha);
+    if (dias > PAGOS_VENTANA) return;
+    items.push({ icon: '📌', name: f.name, tipo: 'Gasto fijo', monto: Number(f.amount) || 0, fecha, dias, page: 'fijos' });
+  });
+  prestamos.forEach(p => {
+    if (prestamoSaldo(p) <= 0) return;
+    const fecha = prestamoProximoVenc(p);
+    const dias = diasRestantes(fecha);
+    if (dias > PAGOS_VENTANA) return;
+    items.push({ icon: '🏦', name: p.name, tipo: 'Cuota de préstamo', monto: prestamoCuotaSugerida(p), fecha, dias, page: 'patrimonio' });
+  });
+  cuentas.forEach(c => {
+    if (c.tipo !== 'credito') return;
+    const ci = creditoPagoExigible(c.id);
+    if (!ci || ci.exigible <= 0) return;
+    const fecha = ci.pago0;
+    const dias = diasRestantes(fecha);
+    if (dias > PAGOS_VENTANA) return;
+    items.push({ icon: '💳', name: c.name, tipo: 'Tarjeta · extracto del ' + fechaCorta(todayISO(ci.x0)), monto: ci.exigible, fecha, dias, page: 'cuentas' });
+  });
+  return items.sort((a, b) => a.fecha - b.fecha);
+}
+
+// Dashboard: tarjetas de crédito que hoy están en días oro.
+function renderDiasOro() {
+  const card = document.getElementById('dash-oro-card');
+  const enOro = cuentas.filter(c => c.tipo === 'credito').map(c => ({ c, ci: cicloTarjeta(c) })).filter(x => x.ci.enOro);
+  if (!enOro.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const fc = d => fechaCorta(todayISO(d));
+  document.getElementById('dash-oro-list').innerHTML = enOro.map(({ c, ci }) => `
+    <div style="font-size:.8rem;color:var(--text2);line-height:1.45;margin-top:.25rem">
+      <strong style="color:var(--text)">${esc(c.name)}</strong>: lo que compres hoy lo pagas el ${fc(ci.compraHoy.pago)}
+      (<strong style="color:var(--text)">${ci.compraHoy.dias} días</strong>). ${ci.diasOroRestantes === 0 ? 'Hoy es el último día.' : `Hasta el ${fc(ci.finOro)}.`}
+    </div>`).join('') +
+    '<div style="font-size:.72rem;color:var(--text3);margin-top:.4rem">Ideal para compras grandes: más plazo para pagar sin intereses.</div>';
+}
+
+function textoDias(d) {
+  if (d < 0) return `vencido hace ${-d} ${d === -1 ? 'día' : 'días'}`;
+  if (d === 0) return 'vence hoy';
+  if (d === 1) return 'vence mañana';
+  return `vence en ${d} días`;
+}
+
+function renderProximosPagos() {
+  const card = document.getElementById('dash-pagos-card');
+  const items = proximosPagos();
+  if (!items.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('dash-pagos-total').textContent = 'Total ' + fmt(items.reduce((s, x) => s + x.monto, 0));
+  const list = document.getElementById('dash-pagos-list');
+  list.innerHTML = items.map(x => `
+    <div class="pp-row ${x.dias < 0 ? 'vencido' : ''}" data-page="${x.page}" role="button" tabindex="0">
+      <div class="pp-ico" aria-hidden="true">${x.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:500;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.name)}</div>
+        <div style="font-size:.74rem;color:var(--text2)">${x.tipo} · ${fechaCorta(todayISO(x.fecha))} · <span class="pp-dias">${textoDias(x.dias)}</span></div>
+      </div>
+      <div style="font-family:var(--font-head);font-weight:700;font-size:.92rem;white-space:nowrap">${fmt(x.monto)}</div>
+    </div>`).join('');
+  list.querySelectorAll('.pp-row').forEach(r => {
+    r.onclick = () => goToPage(r.dataset.page);
+    r.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToPage(r.dataset.page); } };
+  });
+}
+
+/* ─────────────────────────────────────────────────────────
    INSIGHTS
 ───────────────────────────────────────────────────────── */
 function renderInsights() {
+  renderPresupuestos();
+
   const monthTx = transactions.filter(t => isSameMonth(t.date, currentMonth, currentYear));
   const income = monthTx.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
   const varExp = monthTx.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
@@ -3850,7 +5151,7 @@ function renderInsights() {
     const max = sorted[0][1];
     catEl.innerHTML = sorted.map(([cat, amt]) => `
       <div class="rule-row">
-        <div class="rule-labels"><span>${cat}</span><strong>${fmt(amt)}</strong></div>
+        <div class="rule-labels"><span>${esc(cat)}</span><strong>${fmt(amt)}</strong></div>
         <div class="prog-bar"><div class="prog-fill blue" style="width:${Math.round(amt/max*100)}%"></div></div>
       </div>`).join('');
   }
@@ -3939,6 +5240,7 @@ function closeModal() {
   unlockScroll();
   editingId = null; editingFijoId = null; modalMode = null;
   _convertirPasivoId = '';
+  _metaPreseleccion = '';
 }
 
 /* Confirm personalizado: reemplaza window.confirm(), que puede quedar
@@ -4020,7 +5322,7 @@ function openTxForm(type, existing) {
       </div>
       <div class="form-group">
         <label class="form-label">Fecha *</label>
-        <input class="form-input" type="date" id="f-date" value="${esc(t.date)}" min="2000-01-01" max="2100-12-31">
+        <input class="form-input" type="date" id="f-date" value="${esc(t.date)}" min="2000-01-01" max="2100-12-31" onchange="sincCuotasCredito()">
       </div>
     </div>
     <div class="form-group">
@@ -4038,12 +5340,25 @@ function openTxForm(type, existing) {
     </div>
     <div class="form-group" id="cuenta-group" style="display:${t.account==='transfer'?'block':'none'}">
       <label class="form-label">¿En qué cuenta digital?</label>
-      <select class="form-input" id="f-cuenta">${cuentaOptionsHTML(t.cuentaId)}</select>
+      <select class="form-input" id="f-cuenta" onchange="sincCuotasCredito()">${cuentaOptionsHTML(t.cuentaId)}</select>
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
         ${cuentas.length
           ? 'Asigna el movimiento para ver el desglose por cuenta.'
           : 'Aún no tienes cuentas digitales. Créalas en la sección 💳 Cuentas.'}
       </div>
+    </div>
+    <div class="form-group" id="cuotas-group" style="display:none">
+      <label class="form-label">¿A cuántas cuotas? (tarjeta de crédito)</label>
+      <input class="form-input" type="number" id="f-cuotas" min="1" max="120" step="1"
+             value="${t.cuotas && t.cuotas > 1 ? t.cuotas : 1}" placeholder="1 = contado">
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+        1 = contado. Si es a cuotas, la tarjeta las muestra como pendientes.
+      </div>
+      <div class="tc-guia" id="f-guia-tarjeta"></div>
+    </div>
+    <div class="form-group" id="meta-group" style="display:${type === 'saving' && metas.length ? 'block' : 'none'}">
+      <label class="form-label" for="f-meta">¿Para qué meta? (opcional)</label>
+      <select class="form-input" id="f-meta">${metaOptionsHTML(t.metaId || _metaPreseleccion)}</select>
     </div>
     <div class="form-group" id="notes-group">
       <label class="form-label">Descripción (opcional)</label>
@@ -4053,6 +5368,7 @@ function openTxForm(type, existing) {
       ${existing ? 'Guardar cambios' : 'Agregar'}
     </button>
   `);
+  sincCuotasCredito();
 }
 
 let _accountSelected = 'efectivo';
@@ -4063,6 +5379,32 @@ function switchAccount(acc) {
   // El desglose por cuenta digital solo aplica a movimientos por transferencia.
   const grp = document.getElementById('cuenta-group');
   if (grp) grp.style.display = acc === 'transfer' ? 'block' : 'none';
+  sincCuotasCredito();
+}
+
+// Las cuotas solo aplican a compras con tarjeta de crédito.
+function sincCuotasCredito() {
+  const grp = document.getElementById('cuotas-group');
+  if (!grp) return;
+  const sel = document.getElementById('f-cuenta');
+  const esCredito = _accountSelected === 'transfer' && sel && sel.value
+    && cuentaTipo(sel.value) === 'credito' && (_typeSelected === 'expense');
+  grp.style.display = esCredito ? 'block' : 'none';
+  // Guía de fechas: a qué corte entra la compra y cuándo se paga.
+  const guia = document.getElementById('f-guia-tarjeta');
+  if (!guia) return;
+  if (!esCredito) { guia.innerHTML = ''; return; }
+  const c = cuentas.find(x => x.id === sel.value);
+  const fEl = document.getElementById('f-date');
+  const d = parseLocalDate(fEl && fEl.value);
+  if (!c || isNaN(d.getTime())) { guia.innerHTML = ''; return; }
+  const v = vencimientoCompra(c, d);
+  const ci = cicloTarjeta(c);
+  const fc = x => fechaCorta(todayISO(x));
+  const esOro = enDiasOro(c, d);
+  guia.innerHTML = `📅 Entra al corte del <strong>${fc(v.corte)}</strong> · la pagas antes del <strong>${fc(v.pago)}</strong> (${v.dias} días)` +
+    (esOro ? '<br>🌟 <strong>¡Estás en días oro!</strong> Es de los plazos más largos que da esta tarjeta.'
+           : `<br>🌟 Próximo día oro: ${fc(sumarDias(v.corte, 1))} (${vencimientoCompra(c, sumarDias(v.corte, 1)).dias} días de plazo)`);
 }
 
 let _typeSelected = 'income';
@@ -4074,6 +5416,10 @@ function switchType(type) {
   const cats = catsForType(type);
   const sel = document.getElementById('f-category');
   sel.innerHTML = cats.map(c => `<option>${c}</option>`).join('');
+  // La meta solo aplica a ahorros.
+  const metaGrp = document.getElementById('meta-group');
+  if (metaGrp) metaGrp.style.display = type === 'saving' && metas.length ? 'block' : 'none';
+  sincCuotasCredito();
 }
 
 async function saveTxForm(type, existingId) {
@@ -4098,12 +5444,39 @@ async function saveTxForm(type, existingId) {
     if (cuentas.some(c => c.id === cuentaSel.value)) cuentaId = cuentaSel.value;
   }
 
+  // Cuotas: solo compras (gasto) con tarjeta de crédito. 1 = contado.
+  let cuotas = 1;
+  const cuotasEl = document.getElementById('f-cuotas');
+  if (finalType === 'expense' && cuentaId && cuentaTipo(cuentaId) === 'credito' && cuotasEl) {
+    const n = parseInt(cuotasEl.value);
+    if (Number.isFinite(n) && n > 1) cuotas = Math.min(n, 120);
+  }
+
+  // Meta de ahorro: solo en ahorros y si la meta sigue existiendo.
+  const metaSel = document.getElementById('f-meta');
+  const metaId = (finalType === 'saving' && metaSel && metas.some(m => m.id === metaSel.value)) ? metaSel.value : '';
+
   const tx = { id: existingId || uid(), type: finalType, amount, date, category, account, notes, cuentaId };
+  if (cuotas > 1) tx.cuotas = cuotas;
+  if (metaId) tx.metaId = metaId;
+  // Efectivo y débito no pueden quedar en negativo.
+  const errSaldo = validarSaldoMovimiento(tx, existingId ? transactions.find(t => t.id === existingId) : null);
+  if (errSaldo) { showToast(errSaldo); return; }
+  // Avisos calculados ANTES de guardar (comparan el antes y el después).
+  const avisoPresup = avisoPresupuesto(tx);
+  const meta = metaId ? metas.find(m => m.id === metaId) : null;
+  const ahorradoAntes = meta ? metaAhorrado(metaId) - (transactions.find(t => t.id === tx.id && t.metaId === metaId)?.amount || 0) : 0;
   if (!tomarCandado()) return;
   try {
     await saveTransaction(tx);
     closeModal();
-    showToast(existingId ? '✏️ Transacción actualizada' : '✅ Transacción guardada');
+    let msg = existingId ? '✏️ Transacción actualizada' : '✅ Transacción guardada';
+    if (meta && ahorradoAntes < meta.objetivo && ahorradoAntes + amount >= meta.objetivo) {
+      msg = `🎉 ¡Cumpliste la meta "${meta.name}"!`;
+    } else if (avisoPresup) {
+      msg = avisoPresup;
+    }
+    showToast(msg);
     renderPage(currentPage);
   } catch (e) {
     console.error('Error guardando transaccion:', e);
@@ -4122,6 +5495,8 @@ function openEditTx(id) {
 async function confirmDeleteTx(id) {
   const tx = transactions.find(t => t.id === id);
   if (!tx) return;
+  const errSaldo = validarSaldoMovimiento(null, tx);
+  if (errSaldo) { showToast(errSaldo.replace('⚠ Saldo insuficiente', '⚠ No puedes eliminar este ingreso: saldo insuficiente')); return; }
   if (!(await appConfirm('¿Eliminar esta transaccion?'))) return;
   const respaldo = Object.assign({}, tx);   // copia para poder restaurar
   try {
@@ -4249,7 +5624,10 @@ function openReconciliationModal(account, cuentaId) {
   _reconCuentaId = (_reconAccount === 'transfer' && cuentaId) ? cuentaId : '';
   modalMode = 'recon';
   const today = todayISO();
-  openModal('Conciliar Saldo', `
+  // En crédito se concilia la DEUDA con el extracto (positiva).
+  const esCred = _reconAccount === 'transfer' && _reconCuentaId
+    && (cuentas.find(c => c.id === _reconCuentaId) || {}).tipo === 'credito';
+  openModal(esCred ? 'Conciliar Deuda' : 'Conciliar Saldo', `
     <div class="form-group">
       <label class="form-label">Cuenta a conciliar</label>
       <div class="tab-switcher">
@@ -4261,18 +5639,18 @@ function openReconciliationModal(account, cuentaId) {
       <label class="form-label">Cuenta digital</label>
       <select class="form-input" id="rf-cuenta" onchange="switchReconCuenta(this.value)">
         <option value="">Total digital (todas)</option>
-        ${cuentas.map(c => `<option value="${c.id}" ${c.id===_reconCuentaId?'selected':''}>${esc(c.name)}</option>`).join('')}
+        ${cuentas.map(c => `<option value="${c.id}" ${c.id===_reconCuentaId?'selected':''}>${esc(c.name)}${c.tipo==='credito'?' (crédito · debes '+fmt(Math.max(0,cuentaDeuda(c.id)))+')':''}</option>`).join('')}
       </select>
     </div>
     <div class="recon-prev-box" style="display:block">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span class="rp-label">Saldo en libros (actual)</span>
+        <span class="rp-label">${esCred ? 'Deuda actual en libros' : 'Saldo en libros (actual)'}</span>
         <span class="rp-val" id="rp-prev-val">$0</span>
       </div>
       <div class="muted" id="rp-detail" style="font-size:.75rem;margin-top:.35rem"></div>
     </div>
     <div class="form-group">
-      <label class="form-label">Nuevo saldo real *</label>
+      <label class="form-label">${esCred ? 'Nuevo saldo adeudado (extracto) *' : 'Nuevo saldo real *'}</label>
       <input class="form-input" type="text" inputmode="numeric" data-money id="rf-amount"
              placeholder="$ 0" oninput="updateReconPreview()">
     </div>
@@ -4281,12 +5659,12 @@ function openReconciliationModal(account, cuentaId) {
       <input class="form-input" type="date" id="rf-date" value="${today}">
     </div>
     <div class="recon-diff-preview" id="rf-preview">
-      <div class="rd-label">Diferencia / Total hecho</div>
+      <div class="rd-label" id="rf-preview-label">${esCred ? 'Cambio en la deuda' : 'Diferencia / Total hecho'}</div>
       <div class="rd-val" id="rf-preview-val">$0</div>
     </div>
     <div class="form-group">
       <label class="form-label">Nota (opcional)</label>
-      <input class="form-input" type="text" id="rf-notes" placeholder="Ej: Corte de caja del mes">
+      <input class="form-input" type="text" id="rf-notes" placeholder="${esCred ? 'Ej: Extracto de la tarjeta' : 'Ej: Corte de caja del mes'}">
     </div>
     <button class="btn-primary" onclick="saveReconciliationForm()">Guardar conciliación</button>
   `);
@@ -4315,9 +5693,13 @@ function reconBookParts() {
     return { derived: cashDerived(), adjust: cashAdjust(), tr: trasladoNet('efectivo') };
   }
   if (_reconCuentaId) {
+    // Crédito: componentes de la deuda (compras − pagos/ajustes − abonos).
+    if (cuentaTipo(_reconCuentaId) === 'credito') {
+      return { derived: creditoDeudaDerivada(_reconCuentaId), adjust: cuentaReconDiff(_reconCuentaId), tr: -trasladoNet('cuenta:' + _reconCuentaId), esDeuda: true };
+    }
     return { derived: cuentaDerivedBalance(_reconCuentaId), adjust: cuentaReconDiff(_reconCuentaId), tr: trasladoNet('cuenta:' + _reconCuentaId) };
   }
-  return { derived: digitalDerivedTotal(), adjust: transferAdjustTotal(), tr: transferTrasladoTotal() };
+  return { derived: digitalDerivedDebito(), adjust: transferAdjustDebito(), tr: transferTrasladoDebito() };
 }
 
 function updateReconPreview() {
@@ -4331,7 +5713,9 @@ function updateReconPreview() {
   prevVal.textContent = fmt(previous);
   if (detail) {
     const p = reconBookParts();
-    detail.textContent = `Movimientos ${fmt(p.derived)} · ajustes ${p.adjust >= 0 ? '+' : ''}${fmt(p.adjust)} · traslados ${p.tr >= 0 ? '+' : ''}${fmt(p.tr)}. Al guardar, la diferencia se suma al total.`;
+    detail.textContent = p.esDeuda
+      ? `Deuda = compras ${fmt(p.derived)} · ajustes ${p.adjust >= 0 ? '+' : ''}${fmt(p.adjust)} · abonos ${p.tr >= 0 ? '+' : ''}${fmt(p.tr)}. Al guardar, la diferencia ajusta la deuda.`
+      : `Movimientos ${fmt(p.derived)} · ajustes ${p.adjust >= 0 ? '+' : ''}${fmt(p.adjust)} · traslados ${p.tr >= 0 ? '+' : ''}${fmt(p.tr)}. Al guardar, la diferencia se suma al total.`;
   }
 
   const amountEl = document.getElementById('rf-amount');
@@ -4343,7 +5727,12 @@ function updateReconPreview() {
   }
   const amount = parseMoney(amountEl.value);
   const diff = amount - previous;
-  previewBox.className = 'recon-diff-preview ' + (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : ''));
+  const esCredito = _reconAccount === 'transfer' && _reconCuentaId && cuentaTipo(_reconCuentaId) === 'credito';
+  // En crédito, que la deuda BAJE es lo bueno: se invierten los colores.
+  const cls = esCredito
+    ? (diff < 0 ? 'pos' : (diff > 0 ? 'neg' : ''))
+    : (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : ''));
+  previewBox.className = 'recon-diff-preview ' + cls;
   previewVal.textContent = (diff >= 0 ? '+' : '') + fmt(diff);
 }
 
@@ -4396,7 +5785,9 @@ async function saveReconciliationForm() {
 let _trasFrom = 'cuenta:';
 let _trasTo = 'efectivo';
 
-function openTrasladoModal(presetFrom, presetTo) {
+// opciones (opcional): { titulo, intro, monto } — usadas por pagarTarjeta.
+function openTrasladoModal(presetFrom, presetTo, opciones) {
+  const op = opciones || {};
   const eps = trasladoEndpoints();
   _trasFrom = presetFrom && eps.some(e => e.id === presetFrom) ? presetFrom : (eps[0] ? eps[0].id : 'efectivo');
   _trasTo = presetTo && eps.some(e => e.id === presetTo) && presetTo !== _trasFrom
@@ -4404,9 +5795,9 @@ function openTrasladoModal(presetFrom, presetTo) {
     : (eps.map(e => e.id).find(id => id !== _trasFrom) || _trasFrom);
   modalMode = 'traslado';
   const today = todayISO();
-  const opts = sel => eps.map(e => `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${esc(e.label)} · ${fmt(endpointBookBalance(e.id))}</option>`).join('');
-  openModal('Trasladar entre bolsillos', `
-    <p class="muted" style="margin-bottom:1rem">Mueve plata de un bolsillo a otro. No es ingreso ni gasto: el total no cambia.</p>
+  const opts = sel => eps.map(e => opcionEndpointHTML(e, sel)).join('');
+  openModal(op.titulo || 'Trasladar entre bolsillos', `
+    <p class="muted" style="margin-bottom:1rem">${esc(op.intro || 'Mueve plata de un bolsillo a otro. No es ingreso ni gasto: el total no cambia.')}</p>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Desde *</label>
@@ -4422,9 +5813,9 @@ function openTrasladoModal(presetFrom, presetTo) {
       <span class="rp-val" id="tr-from-val">$0</span>
     </div>
     <div class="form-group">
-      <label class="form-label">Monto a trasladar *</label>
+      <label class="form-label">${op.monto > 0 ? 'Monto a pagar' : 'Monto a trasladar'} *</label>
       <input class="form-input" type="text" inputmode="numeric" data-money id="tr-amount"
-             placeholder="$ 0" oninput="updateTrasladoPreview()">
+             placeholder="$ 0" oninput="updateTrasladoPreview()" value="${op.monto > 0 ? fmtInput(op.monto) : ''}">
     </div>
     <div class="form-group">
       <label class="form-label">Fecha *</label>
@@ -4449,6 +5840,15 @@ function switchTraslado() {
   updateTrasladoPreview();
 }
 
+// Vista de un endpoint para traslados: débito muestra saldo disponible,
+// crédito muestra la deuda (positiva).
+function estadoEndpointTraslado(ep) {
+  if (ep && ep.indexOf('cuenta:') === 0 && cuentaTipo(ep.slice(7)) === 'credito') {
+    return { etiqueta: 'Deuda en', valor: cuentaDeuda(ep.slice(7)), esDeuda: true };
+  }
+  return { etiqueta: 'Disponible en', valor: Number(endpointBookBalance(ep)) || 0, esDeuda: false };
+}
+
 function updateTrasladoPreview() {
   const fromVal = document.getElementById('tr-from-val');
   const box = document.getElementById('tr-preview');
@@ -4456,26 +5856,37 @@ function updateTrasladoPreview() {
   const lbl = document.getElementById('tr-preview-label');
   const fromLbl = document.getElementById('tr-from-label');
   if (!fromVal || !box || !val) return;
-  const disp = Number(endpointBookBalance(_trasFrom)) || 0;
-  fromVal.textContent = fmt(disp);
-  if (fromLbl) fromLbl.textContent = 'Disponible en ' + endpointLabel(_trasFrom);
+  const vf = estadoEndpointTraslado(_trasFrom);
+  const vt = estadoEndpointTraslado(_trasTo);
+  fromVal.textContent = fmt(vf.valor);
+  if (fromLbl) fromLbl.textContent = vf.etiqueta + ' ' + endpointLabel(_trasFrom);
   const amount = parseMoney(document.getElementById('tr-amount').value);
   if (_trasFrom === _trasTo) {
     box.className = 'recon-diff-preview neg';
     val.textContent = 'El origen y el destino no pueden ser el mismo';
     return;
   }
-  if (!amount) {
-    box.className = 'recon-diff-preview';
-    val.textContent = `${esc(endpointLabel(_trasFrom))} ${fmt(disp)} → ${esc(endpointLabel(_trasTo))} ${fmt(endpointBookBalance(_trasTo))}`;
+  // De una tarjeta de crédito no se saca: sería más deuda (avance).
+  if (vf.esDeuda) {
+    box.className = 'recon-diff-preview neg';
+    val.textContent = 'De una tarjeta de crédito no se traslada: aumentaría la deuda. Para pagarla, elígela como destino.';
     return;
   }
-  const queda = disp - amount;
-  const llega = (Number(endpointBookBalance(_trasTo)) || 0) + amount;
+  const fmtFin = (vista, despues) => vista.esDeuda
+    ? `Deuda ${fmt(vista.valor)} → <strong>${fmt(despues)}</strong>`
+    : `${fmt(vista.valor)} → <strong>${fmt(despues)}</strong>`;
+  if (!amount) {
+    box.className = 'recon-diff-preview';
+    val.innerHTML = `${esc(endpointLabel(_trasFrom))}: ${fmtFin(vf, vf.valor)}<br>${esc(endpointLabel(_trasTo))}: ${fmtFin(vt, vt.valor)}`;
+    return;
+  }
+  const queda = vf.valor - amount;
+  // Pagar tarjeta (destino crédito) baja la deuda; resto de casos suma.
+  const llega = vt.esDeuda ? vt.valor - amount : vt.valor + amount;
   const ok = queda >= 0;
   box.className = 'recon-diff-preview ' + (ok ? 'pos' : 'neg');
   if (lbl) lbl.textContent = ok ? 'Resultado del traslado' : 'Te falta saldo en el origen';
-  val.innerHTML = `${esc(endpointLabel(_trasFrom))}: ${fmt(disp)} → <strong>${fmt(queda)}</strong><br>${esc(endpointLabel(_trasTo))}: ${fmt(endpointBookBalance(_trasTo))} → <strong>${fmt(llega)}</strong>`;
+  val.innerHTML = `${esc(endpointLabel(_trasFrom))}: ${fmtFin(vf, queda)}<br>${esc(endpointLabel(_trasTo))}: ${fmtFin(vt, llega)}`;
 }
 
 async function saveTrasladoForm() {
@@ -4491,6 +5902,10 @@ async function saveTrasladoForm() {
   if (errFecha) { showToast(errFecha); return; }
   if (!eps.includes(from) || !eps.includes(to)) { showToast('⚠ Elige origen y destino válidos'); return; }
   if (from === to) { showToast('⚠ El origen y el destino no pueden ser el mismo'); return; }
+  if (from.indexOf('cuenta:') === 0 && cuentaTipo(from.slice(7)) === 'credito') {
+    showToast('⚠ De una tarjeta de crédito no se traslada: aumentaría la deuda');
+    return;
+  }
   if (amount > (Number(endpointBookBalance(from)) || 0)) {
     showToast('⚠ No tienes saldo suficiente en ' + endpointLabel(from) + ' (' + fmt(endpointBookBalance(from)) + ')');
     return;
@@ -4508,17 +5923,17 @@ async function saveTrasladoForm() {
 }
 
 function exportJSON() {
-  const data = { version: 8, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio, cuentas, traslados, prestamos };
+  const data = { version: 9, exportedAt: new Date().toISOString(), transactions, fijos, balances, patrimonio, cuentas, traslados, prestamos, presupuestos, metas };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   download(blob, 'kasa-backup-' + todayISO() + '.json');
   showToast('📦 JSON descargado');
 }
 
 function exportCSV() {
-  const headers = ['ID','Tipo','Monto','Fecha','Categoría','Cuenta','Cuenta Digital','Notas'];
+  const headers = ['ID','Tipo','Monto','Fecha','Categoría','Cuenta','Cuenta Digital','Meta','Notas'];
   const rows = transactions.map(t => [
     t.id, t.type, t.amount, t.date, t.category, t.account,
-    t.cuentaId ? cuentaName(t.cuentaId) : '', t.notes || ''
+    t.cuentaId ? cuentaName(t.cuentaId) : '', t.metaId ? metaName(t.metaId) : '', t.notes || ''
   ]);
   const csv = [headers, ...rows].map(r => r.map(celdaCSV).join(',')).join('\r\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -4564,17 +5979,31 @@ async function importJSON(file) {
     const fechaOk = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : todayISO();
     const TIPOS = ['income', 'expense', 'saving'];
     const ok = await appConfirm(
-      `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos, ${(data.balances||[]).length} conciliaciones, ${(data.traslados||[]).length} traslados y ${(data.prestamos||[]).length} préstamos? Esto reemplazará los datos actuales.`,
+      `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos, ${(data.balances||[]).length} conciliaciones, ${(data.traslados||[]).length} traslados ${(data.prestamos||[]).length} préstamos, ${(data.presupuestos||[]).length} presupuestos y ${(data.metas||[]).length} metas? Esto reemplazará los datos actuales.`,
       'Importar'
     );
     if (!ok) return;
-    cuentas = comoArray(data.cuentas).filter(c => c && c.id).map(c => ({
+    const nCuentas = comoArray(data.cuentas).filter(c => c && c.id).map(c => ({
       id: txt(c.id, 40), name: txt(c.name, 60) || 'Cuenta', entidad: txt(c.entidad, 60),
+      // Cuentas viejas sin tipo quedan "sin modalidad" para asignarlas.
+      tipo: (c.tipo === 'debito' || c.tipo === 'credito') ? c.tipo : '',
+      diaCorte: Math.min(Math.max(parseInt(c.diaCorte) || 1, 1), 31),
+      diaPago: Math.min(Math.max(parseInt(c.diaPago) || 1, 1), 31),
+      cupo: num(c.cupo),
+      diasOro: diasOroDe(c),
       createdAt: Number(c.createdAt) || Date.now()
     }));
-    const idsCuenta = new Set(cuentas.map(c => c.id));
+    const idsCuenta = new Set(nCuentas.map(c => c.id));
 
-    transactions = comoArray(data.transactions).filter(t => t && t.id).map(t => ({
+    const nMetas = comoArray(data.metas).filter(m => m && m.id).map(m => ({
+      id: txt(m.id, 40), name: txt(m.name, 60) || 'Meta',
+      objetivo: num(m.objetivo),
+      fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(m.fecha || '')) ? m.fecha : '',
+      createdAt: Number(m.createdAt) || Date.now()
+    })).filter(m => m.objetivo > 0);
+    const idsMeta = new Set(nMetas.map(m => m.id));
+
+    const nTransactions = comoArray(data.transactions).filter(t => t && t.id).map(t => ({
       id: txt(t.id, 40),
       type: TIPOS.includes(t.type) ? t.type : 'expense',
       amount: num(t.amount),
@@ -4583,10 +6012,14 @@ async function importJSON(file) {
       account: t.account === 'transfer' ? 'transfer' : 'efectivo',
       // Referencia a cuenta solo si la cuenta existe: evita huerfanos.
       cuentaId: idsCuenta.has(t.cuentaId) ? t.cuentaId : '',
-      notes: txt(t.notes, 200)
+      // Cuotas de tarjeta de crédito (1 = contado). Solo se conserva > 1.
+      cuotas: (() => { const n = parseInt(t.cuotas); return (Number.isFinite(n) && n > 1) ? Math.min(n, 120) : 1; })(),
+      notes: txt(t.notes, 200),
+      // Aporte a una meta de ahorro: solo en ahorros y si la meta existe.
+      metaId: (t.type === 'saving' && idsMeta.has(t.metaId)) ? t.metaId : ''
     })).filter(t => t.amount > 0);
 
-    fijos = comoArray(data.fijos).filter(f => f && f.id).map(f => ({
+    const nFijos = comoArray(data.fijos).filter(f => f && f.id).map(f => ({
       id: txt(f.id, 40), name: txt(f.name, 80) || 'Gasto fijo',
       amount: num(f.amount), category: txt(f.category, 60) || 'Otros fijos',
       dias: Math.min(Math.max(parseInt(f.dias) || 30, 1), 366),
@@ -4601,7 +6034,7 @@ async function importJSON(file) {
       })) : []
     })).filter(f => f.amount > 0);
 
-    balances = comoArray(data.balances).filter(b => b && b.id).map(b => ({
+    const nBalances = comoArray(data.balances).filter(b => b && b.id).map(b => ({
       id: txt(b.id, 40), account: b.account === 'transfer' ? 'transfer' : 'efectivo',
       cuentaId: idsCuenta.has(b.cuentaId) ? b.cuentaId : '',
       previousAmount: num(b.previousAmount), amount: num(b.amount),
@@ -4610,18 +6043,13 @@ async function importJSON(file) {
       createdAt: Number(b.createdAt) || Date.now()
     }));
 
-    patrimonio = comoArray(data.patrimonio).filter(p => p && p.id).map(p => ({
+    const nPatrimonio = comoArray(data.patrimonio).filter(p => p && p.id).map(p => ({
       id: txt(p.id, 40), kind: p.kind === 'pasivo' ? 'pasivo' : 'activo',
       name: txt(p.name, 80) || 'Registro', amount: num(p.amount),
       category: txt(p.category, 60) || 'Otro activo', notes: txt(p.notes, 200)
     })).filter(p => p.amount > 0);
-    await Promise.all(transactions.map(t => dbPut('transactions', t)));
-    await Promise.all(fijos.map(f => dbPut('fijos', f)));
-    await Promise.all(balances.map(b => dbPut('balances', b)));
-    await Promise.all(patrimonio.map(p => dbPut('patrimonio', p)));
-    await Promise.all(cuentas.map(c => dbPut('cuentas', c)));
     const epOk = v => v === 'efectivo' || v === 'transfer' || (typeof v === 'string' && v.indexOf('cuenta:') === 0 && idsCuenta.has(v.slice(7)));
-    traslados = comoArray(data.traslados).filter(tr => tr && tr.id).map(tr => ({
+    const nTraslados = comoArray(data.traslados).filter(tr => tr && tr.id).map(tr => ({
       id: txt(tr.id, 40),
       amount: num(tr.amount),
       from: epOk(tr.from) ? tr.from : 'efectivo',
@@ -4629,8 +6057,7 @@ async function importJSON(file) {
       date: fechaOk(tr.date), notes: txt(tr.notes, 200),
       createdAt: Number(tr.createdAt) || Date.now()
     })).filter(tr => tr.amount > 0 && tr.from !== tr.to);
-    await Promise.all(traslados.map(tr => dbPut('traslados', tr)));
-    prestamos = comoArray(data.prestamos).filter(pr => pr && pr.id).map(pr => ({
+    const nPrestamos = comoArray(data.prestamos).filter(pr => pr && pr.id).map(pr => ({
       id: txt(pr.id, 40), name: txt(pr.name, 80) || 'Préstamo',
       entidad: txt(pr.entidad, 60), tasa: txt(pr.tasa, 10),
       initialAmount: num(pr.initialAmount), cuota: num(pr.cuota),
@@ -4654,7 +6081,24 @@ async function importJSON(file) {
         };
       }) : []
     })).filter(pr => pr.initialAmount > 0 && pr.cuota > 0);
-    await Promise.all(prestamos.map(pr => dbPut('prestamos', pr)));
+    // Presupuestos: una sola entrada por categoría.
+    const catsVistas = new Set();
+    const nPresupuestos = comoArray(data.presupuestos).filter(pp => pp && pp.id).map(pp => ({
+      id: txt(pp.id, 40), category: txt(pp.category, 60), monto: num(pp.monto)
+    })).filter(pp => pp.category && pp.monto > 0 && !catsVistas.has(pp.category) && catsVistas.add(pp.category));
+
+    // Todo validado: ahora sí se reemplaza. Antes solo se agregaban
+    // registros y lo viejo seguía en IndexedDB (reaparecía al recargar).
+    const nuevos = { transactions: nTransactions, fijos: nFijos, balances: nBalances, patrimonio: nPatrimonio,
+                     cuentas: nCuentas, traslados: nTraslados, prestamos: nPrestamos,
+                     presupuestos: nPresupuestos, metas: nMetas };
+    for (const store of Object.keys(nuevos)) {
+      await dbClear(store);
+      await Promise.all(nuevos[store].map(x => dbPut(store, x)));
+    }
+    transactions = nTransactions; fijos = nFijos; balances = nBalances; patrimonio = nPatrimonio;
+    cuentas = nCuentas; traslados = nTraslados; prestamos = nPrestamos;
+    presupuestos = nPresupuestos; metas = nMetas;
     showToast('📂 Datos importados exitosamente');
     renderPage(currentPage);
   } catch (e) {
@@ -4814,19 +6258,19 @@ function generateReportHTML() {
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;background:#fff;padding:32px 28px;line-height:1.4}
-  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f1117;padding-bottom:14px;margin-bottom:22px}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0b3b2e;padding-bottom:14px;margin-bottom:22px}
   .brand{font-size:26px;font-weight:800;letter-spacing:-.5px}
-  .brand .k{color:#8bbb00}
+  .brand .k{color:#059669}
   .brand small{display:block;font-size:12px;font-weight:400;color:#666;letter-spacing:0}
   .meta{text-align:right;font-size:12px;color:#555}
   .meta strong{font-size:14px;color:#111}
-  h2{font-size:15px;text-transform:uppercase;letter-spacing:.5px;margin:26px 0 10px;padding-bottom:5px;border-bottom:1.5px solid #ddd;color:#0f1117}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.5px;margin:26px 0 10px;padding-bottom:5px;border-bottom:1.5px solid #ddd;color:#0b3b2e}
   table{width:100%;border-collapse:collapse;font-size:13px}
   td{padding:7px 4px;border-bottom:1px solid #eee;vertical-align:top}
   .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
   .pos{color:#2e9e63}.neg{color:#c23a3a}
   .cat{display:block;font-size:10.5px;color:#999;font-weight:400}
-  .total td{border-top:2px solid #0f1117;border-bottom:none;font-weight:800;font-size:14px;padding-top:9px}
+  .total td{border-top:2px solid #0b3b2e;border-bottom:none;font-weight:800;font-size:14px;padding-top:9px}
   .sub td{font-weight:700;background:#f7f7f4}
   .muted{color:#999;font-style:italic}
   .cols{display:flex;gap:26px}.cols>div{flex:1}
@@ -4998,10 +6442,24 @@ function exportReportCSV() {
 /* ─────────────────────────────────────────────────────────
    THEME
 ───────────────────────────────────────────────────────── */
-let isDark = safeLSGet('kasa_theme') === 'dark';
+// Sin elección guardada se sigue el tema del sistema (antes abría siempre
+// en claro aunque el celular estuviera en oscuro).
+const _mqOscuro = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+const _temaGuardado = safeLSGet('kasa_theme');
+let isDark = _temaGuardado ? _temaGuardado === 'dark' : !!(_mqOscuro && _mqOscuro.matches);
+if (_mqOscuro && _mqOscuro.addEventListener) {
+  _mqOscuro.addEventListener('change', e => {
+    if (safeLSGet('kasa_theme')) return;   // el usuario ya eligió a mano
+    isDark = e.matches;
+    applyTheme();
+  });
+}
 
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  // La barra de estado del celular acompaña al tema (antes era siempre oscura).
+  const metaTema = document.getElementById('meta-theme-color');
+  if (metaTema) metaTema.setAttribute('content', isDark ? '#0a1410' : '#ecf2ee');
   const icon = isDark ? '☀️' : '🌙';
   const txt = isDark ? 'Modo claro' : 'Modo oscuro';
   document.getElementById('theme-icon-sidebar').textContent = icon;
@@ -5057,14 +6515,26 @@ window.addEventListener('unhandledrejection', e => reportarError('promesa', e.re
 /* ─────────────────────────────────────────────────────────
    SIDEBAR
 ───────────────────────────────────────────────────────── */
+// En móvil el fondo se desplazaba al arrastrar sobre el panel: se usa el
+// mismo bloqueo de scroll que los modales.
 function openSidebar() {
   document.getElementById('sidebar').classList.add('mobile-open');
   document.getElementById('sidebar-overlay').classList.add('open');
+  lockScroll();
 }
 function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('mobile-open');
+  const sb = document.getElementById('sidebar');
+  // goToPage siempre llama aquí: si el panel no estaba abierto no se toca
+  // el bloqueo (podría pertenecer a un modal abierto).
+  if (!sb.classList.contains('mobile-open')) return;
+  sb.classList.remove('mobile-open');
   document.getElementById('sidebar-overlay').classList.remove('open');
+  unlockScroll();
 }
+// Si se pasa a escritorio con el panel abierto, se cierra y libera el scroll.
+window.matchMedia('(min-width:769px)').addEventListener('change', e => {
+  if (e.matches) closeSidebar();
+});
 
 /* ─────────────────────────────────────────────────────────
    EVENT LISTENERS
@@ -5106,6 +6576,12 @@ document.getElementById('add-btn-prestamo').addEventListener('click', () => {
 document.getElementById('add-btn-cuenta').addEventListener('click', () => {
   openCuentaForm();
 });
+document.getElementById('add-btn-presupuesto').addEventListener('click', () => {
+  openPresupuestoForm();
+});
+document.getElementById('add-btn-meta').addEventListener('click', () => {
+  openMetaForm();
+});
 
 // Modal close
 document.getElementById('modal-close').addEventListener('click', closeModal);
@@ -5140,6 +6616,7 @@ document.getElementById('sidebar-overlay').addEventListener('click', closeSideba
 let _debounceBusqueda;
 document.getElementById('tx-search').addEventListener('input', e => {
   _txBusqueda = e.target.value;
+  _txLimite = TX_BLOQUE;
   clearTimeout(_debounceBusqueda);
   _debounceBusqueda = setTimeout(() => {
     renderTransactions();
@@ -5220,6 +6697,8 @@ async function init() {
     balances = balances.length ? balances : [];
     traslados = Array.isArray(traslados) ? traslados : [];
     prestamos = Array.isArray(prestamos) ? prestamos : [];
+    presupuestos = Array.isArray(presupuestos) ? presupuestos : [];
+    metas = Array.isArray(metas) ? metas : [];
   }
   renderDashboard();
 
