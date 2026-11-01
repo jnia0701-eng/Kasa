@@ -224,3 +224,31 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
   3 categorías con más gasto, y en el mes en curso cuánto puedes gastar por día.
 - Si tenías presupuestos por categoría (v4), se suman solos en uno general (también
   al importar un respaldo viejo). El formato de datos no cambia (IndexedDB v7, JSON 9).
+
+---
+
+## v6 · Inicio mes a mes y auditoría
+
+**📅 Inicio según el mes**
+- Al navegar de mes, Inicio muestra los saldos de ese mes: en un mes pasado,
+  "Saldo al cierre de…" (efectivo, digital, desglose y totales a fin de mes); en uno
+  futuro, el saldo proyectado. Recientes muestra los movimientos de ese mes.
+- Próximos pagos, días oro y avisos de saldo negativo solo aparecen en el mes en curso.
+- Si la app queda abierta y cambia el mes, al volver se pasa al mes nuevo.
+
+**🎯 Presupuesto**
+- Cuentan también los pagos de gastos fijos y cuotas registrados "sin descontar"
+  (pagados antes de anotarlos), en el mes en que se pagaron.
+- **Mes a mes** en Insights: los últimos 6 meses con lo gastado y el % del tope;
+  tocar un mes lo selecciona.
+
+**🔧 Correcciones**
+- Los gastos fijos ya no se cuentan dos veces en el semáforo, la regla 50/30/20 y el
+  Estado de Resultados.
+- Balance General: la deuda de las tarjetas de crédito va a Pasivos (antes, si superaba
+  lo que había en débito, el exceso desaparecía).
+- Eliminar una cuenta ya no borra su saldo inicial del total.
+- Editar un movimiento conserva su categoría (pagos de fijos, préstamos).
+- El movimiento de un pago de fijo o cuota se deshace desde su sección, no desde
+  Movimientos, para que el pago no quede marcado sin plata.
+- Importar un respaldo sanea los identificadores (seguridad).

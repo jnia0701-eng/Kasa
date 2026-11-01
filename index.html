@@ -367,6 +367,11 @@ a{text-decoration:none;color:inherit}
 .presup-mov{display:flex;justify-content:space-between;gap:.5rem;font-size:.75rem;color:var(--text2);padding:.15rem 0}
 .presup-mov span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .presup-mov strong{color:var(--text);font-weight:600;white-space:nowrap}
+.presup-hist{display:grid;grid-template-columns:3.4rem 1fr auto 2.8rem;align-items:center;gap:.5rem;font-size:.75rem;color:var(--text2);padding:.2rem .3rem;border-radius:6px;cursor:pointer}
+.presup-hist .prog-bar{margin:0}
+.presup-hist strong{color:var(--text);font-weight:600;white-space:nowrap}
+.presup-hist .ph-pct{text-align:right}
+.presup-hist.sel{background:var(--bg2);color:var(--text);font-weight:600}
 
 /* Ant alert */
 .ant-alert{
@@ -708,7 +713,7 @@ body.modal-open{overflow:hidden}
 
     <!-- Balance hero: KPIs principales del resumen -->
     <div id="balance-hero">
-      <div class="label">Total Disponible</div>
+      <div class="label" id="hero-label">Total Disponible</div>
       <div class="amount" id="hero-balance">$0</div>
       <div class="balance-split">
         <div class="split-item">
@@ -815,7 +820,7 @@ body.modal-open{overflow:hidden}
 
     <!-- Recent transactions -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
-      <div class="section-title" style="margin:0">Recientes</div>
+      <div class="section-title" style="margin:0" id="recent-title">Recientes</div>
       <span style="font-size:.8rem;color:var(--text2);cursor:pointer" onclick="goToPage('transacciones')">Ver todo →</span>
     </div>
     <div id="recent-list" class="tx-list"></div>
@@ -1439,6 +1444,15 @@ function fijoMensualProrrateado(f) { return f.amount / mesesCiclo(f); }
 // Meta: cuánto ahorrar al mes para cubrir TODOS los fijos (mensuales + anuales).
 function fijosMensualRequerido() {
   return fijos.reduce((s, f) => s + fijoMensualProrrateado(f), 0);
+}
+
+// Ids de los movimientos creados al pagar un gasto fijo. En el semáforo,
+// la regla 50/30/20 y el Estado de Resultados los fijos ya entran con su
+// carga mensual prorrateada: sumar también estos pagos los duplicaba.
+function txIdsDeFijos() {
+  const s = new Set();
+  fijos.forEach(f => (f.pagos || []).forEach(x => { if (x.txId) s.add(x.txId); }));
+  return s;
 }
 
 /* ────────────────────────────────────────
@@ -2120,7 +2134,16 @@ function patrimonioTotals() {
   // entra automatico; solo se suman saldos positivos.
   const bk = accountTotals();
   const autoCaja = Math.max(0, bk.cash);
-  const autoDigital = Math.max(0, bk.digital);
+  // Digital en activos = lo débito (+ saldos a favor en tarjetas); la deuda
+  // de las tarjetas va a pasivos. Antes se usaba el neto y, si la deuda
+  // superaba lo que había en débito, el exceso desaparecía del Balance.
+  let pasivosTarjetas = 0, favorTarjetas = 0;
+  cuentas.forEach(c => {
+    if (cuentaTipo(c.id) !== 'credito') return;
+    const d = cuentaDeuda(c.id);
+    if (d > 0) pasivosTarjetas += d; else favorTarjetas -= d;
+  });
+  const autoDigital = Math.max(0, bk.digital + creditoDeudaTotal()) + favorTarjetas;
   const activos = manualActivos() + ahorros + autoCaja + autoDigital;
   // Pasivos = manuales + saldo vivo de prestamos con amortizacion.
   // Si migras una deuda manual a un prestamo, borra la entrada manual
@@ -2128,8 +2151,8 @@ function patrimonioTotals() {
   // manuales: las filas automaticas ya los incluyen.
   const pasivosManuales = manualPasivos();
   const pasivosPrestamos = prestamosSaldoTotal();
-  const pasivos = pasivosManuales + pasivosPrestamos;
-  return { ahorros, activos, pasivos, pasivosManuales, pasivosPrestamos, autoCaja, autoDigital, neto: activos - pasivos };
+  const pasivos = pasivosManuales + pasivosPrestamos + pasivosTarjetas;
+  return { ahorros, activos, pasivos, pasivosManuales, pasivosPrestamos, pasivosTarjetas, autoCaja, autoDigital, neto: activos - pasivos };
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -2294,16 +2317,50 @@ function isSameMonth(dateStr, month, year) {
 /* ─────────────────────────────────────────────────────────
    DASHBOARD
 ───────────────────────────────────────────────────────── */
+/* Corre fn() viendo solo los movimientos, conciliaciones y traslados con
+   fecha hasta `hastaISO`: los saldos salen "al cierre" de ese día con las
+   mismas funciones de siempre. Es síncrono y siempre restaura los datos. */
+function conDatosHasta(hastaISO, fn) {
+  const tx = transactions, bal = balances, tr = traslados;
+  transactions = tx.filter(t => (t.date || '') <= hastaISO);
+  balances = bal.filter(b => (b.date || '') <= hastaISO);
+  traslados = tr.filter(x => (x.date || '') <= hastaISO);
+  try { return fn(); } finally { transactions = tx; balances = bal; traslados = tr; }
+}
+
+function esMesEnCurso(month, year) {
+  const hoy = new Date();
+  return month === hoy.getMonth() && year === hoy.getFullYear();
+}
+
+// El mes en curso muestra los saldos de hoy (los mismos que validan cada
+// gasto). Otro mes muestra los saldos al cierre de ese mes: antes el
+// Dashboard usaba siempre todo el historial y no cambiaba al navegar.
 function renderDashboard() {
-  document.getElementById('month-label').textContent = MONTHS_ES[currentMonth] + ' ' + currentYear;
+  if (esMesEnCurso(currentMonth, currentYear)) { pintarDashboard(true); return; }
+  conDatosHasta(todayISO(new Date(currentYear, currentMonth + 1, 0)), () => pintarDashboard(false));
+}
+
+function pintarDashboard(esActual) {
+  const nombreMes = MONTHS_ES[currentMonth] + ' ' + currentYear;
+  document.getElementById('month-label').textContent = nombreMes;
+  const esFuturo = !esActual && new Date(currentYear, currentMonth, 1) > new Date();
+  document.getElementById('hero-label').textContent = esActual ? 'Total Disponible'
+    : (esFuturo ? 'Saldo proyectado a fin de ' : 'Saldo al cierre de ') + nombreMes;
 
   // Una sola pasada para los totales del mes y los acumulados (antes
   // eran seis recorridos completos de transactions en cada render).
-  let income = 0, expense = 0, savingMonth = 0, totalExpense = 0, totalSaving = 0;
+  // Los pagos de gastos fijos no entran al compromiso del semáforo: ya
+  // están en la carga mensual prorrateada (antes se contaban dos veces).
+  const idsFijos = txIdsDeFijos();
+  let income = 0, expense = 0, expenseSinFijos = 0, savingMonth = 0, totalExpense = 0, totalSaving = 0;
   for (let i = 0; i < transactions.length; i++) {
     const t = transactions[i];
     const delMes = isSameMonth(t.date, currentMonth, currentYear);
-    if (t.type === 'expense') { totalExpense += t.amount; if (delMes) expense += t.amount; }
+    if (t.type === 'expense') {
+      totalExpense += t.amount;
+      if (delMes) { expense += t.amount; if (!idsFijos.has(t.id)) expenseSinFijos += t.amount; }
+    }
     else if (t.type === 'saving') { totalSaving += t.amount; if (delMes) savingMonth += t.amount; }
     else if (t.type === 'income' && delMes) income += t.amount;
   }
@@ -2321,7 +2378,9 @@ function renderDashboard() {
   document.getElementById('hero-bank').textContent = fmt(totalSaving);
   const heroAdjustEl = document.getElementById('hero-adjust');
   heroAdjustEl.textContent = (totalAdjust >= 0 ? '+' : '') + fmt(totalAdjust);
-  document.getElementById('hero-adjust-note').textContent = balances.length
+  document.getElementById('hero-adjust-note').textContent = !esActual
+    ? `Acumulado ${esFuturo ? 'con lo registrado' : 'al cierre'} de ${nombreMes}: movimientos, conciliaciones y traslados hasta el ${fechaCorta(todayISO(new Date(currentYear, currentMonth + 1, 0)))}.`
+    : balances.length
     ? 'El Total Disponible incluye la diferencia de tus conciliaciones de saldo.'
     : 'Concilia tu saldo real en Efectivo o Digital para ajustar este total.';
   document.getElementById('stat-income').textContent = fmt(income);
@@ -2341,10 +2400,16 @@ function renderDashboard() {
   // Desglose de cuentas digitales
   renderDashCuentas();
 
-  // Efectivo/débito en negativo, próximos pagos (7 días) y presupuestos en 80 %+
-  renderAvisoNegativos();
-  renderProximosPagos();
-  renderDiasOro();
+  // Negativos, próximos pagos y días oro hablan de HOY: solo en el mes en curso.
+  if (esActual) {
+    renderAvisoNegativos();
+    renderProximosPagos();
+    renderDiasOro();
+  } else {
+    document.getElementById('dash-negativos').innerHTML = '';
+    document.getElementById('dash-pagos-card').style.display = 'none';
+    document.getElementById('dash-oro-card').style.display = 'none';
+  }
   renderAlertasPresupuesto();
 
   // Carga MENSUAL de los fijos: los de periodicidad mayor entran solo con
@@ -2368,7 +2433,7 @@ function renderDashboard() {
      (saldo acumulado + ajustes de conciliacion), no contra los ingresos
      del mes. Asi un mes sin ingresos registrados no marca riesgo si hay
      respaldo acumulado suficiente. */
-  const compromisoMensual = expense + fixedTotal;
+  const compromisoMensual = expenseSinFijos + fixedTotal;
   const sem = document.getElementById('semaforo-widget');
   const semT = document.getElementById('sem-title');
   const semM = document.getElementById('sem-msg');
@@ -2406,11 +2471,15 @@ function renderDashboard() {
     }
   }
 
-  // Recent (last 5)
-  const sorted = [...transactions].sort(porFechaDesc).slice(0, 5);
+  // Recientes: los últimos 5; en otro mes, los últimos 5 de ese mes.
+  const base = esActual ? transactions : transactions.filter(t => isSameMonth(t.date, currentMonth, currentYear));
+  const sorted = [...base].sort(porFechaDesc).slice(0, 5);
+  document.getElementById('recent-title').textContent = esActual ? 'Recientes' : 'Movimientos de ' + nombreMes;
   const list = document.getElementById('recent-list');
   if (!sorted.length) {
-    list.innerHTML = '<div class="empty"><div class="e-icon">📭</div>Sin movimientos aún. Toca + para agregar.</div>';
+    list.innerHTML = esActual
+      ? '<div class="empty"><div class="e-icon">📭</div>Sin movimientos aún. Toca + para agregar.</div>'
+      : '<div class="empty"><div class="e-icon">📭</div>Sin movimientos en este mes.</div>';
     return;
   }
   list.innerHTML = sorted.map(t => txItemHTML(t, false)).join('');
@@ -2914,7 +2983,7 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
 
     const actualizado = Object.assign({}, f, {
       pagos: (f.pagos || []).concat([{
-        fecha, vencia: vence, metodo, cuentaId: cuentaId || '',
+        fecha, vencia: vence, metodo, cuentaId: cuentaId || '', monto: f.amount,
         txId, registradoEl: fechaMovimiento, sinMovimiento: !generaMovimiento
       }])
     });
@@ -3299,6 +3368,8 @@ async function guardarAsignaciones() {
 async function confirmBorrarMovimientoSuelto(txId) {
   const tx = transactions.find(t => t.id === txId);
   if (!tx) return;
+  const vinc = pagoVinculadoA(txId);
+  if (vinc) { showToast(`⚠ Es el pago de "${vinc.nombre}". Deshazlo desde ${vinc.lugar}`); return; }
   if (!(await appConfirm(`¿Eliminar el movimiento de ${fmt(tx.amount)} (${esc(tx.category)})? Esta acción no se puede deshacer.`))) {
     openAsignarCuentaModal();   // vuelve a la lista si se cancela
     return;
@@ -3459,12 +3530,20 @@ async function confirmDeleteCuenta(id) {
     : '¿Eliminar esta cuenta digital? Esta acción no se puede deshacer.';
   if (!(await appConfirm(msg))) return;
   try {
-    // Libera los movimientos y limpia las conciliaciones de la cuenta para
-    // que su saldo no siga contando en el ajuste global.
+    // Libera los movimientos. Sus conciliaciones (p. ej. el saldo inicial)
+    // pasan al Total digital: antes se borraban y esa plata desaparecía del
+    // total. En crédito el ajuste era deuda, así que en lo general resta.
+    const esCred = cuentaTipo(id) === 'credito';
+    const nombre = cuentaName(id);
     const huerfanas = transactions.filter(t => t.cuentaId === id);
     for (const t of huerfanas) { t.cuentaId = ''; await dbPut('transactions', t); }
     const recons = balances.filter(b => b.cuentaId === id);
-    for (const b of recons) await deleteBalanceRecord(b.id);
+    for (const b of recons) {
+      await saveBalanceRecord(Object.assign({}, b, {
+        cuentaId: '', diff: esCred ? -(Number(b.diff) || 0) : b.diff,
+        notes: ((b.notes ? b.notes + ' · ' : '') + 'de la cuenta eliminada ' + nombre).slice(0, 200)
+      }));
+    }
     // Los traslados de la cuenta pasan a la bolsa digital general para
     // que la plata no "desaparezca" del total.
     const moves = traslados.filter(tr => tr.from === 'cuenta:' + id || tr.to === 'cuenta:' + id);
@@ -3495,7 +3574,8 @@ function renderPatrimonio() {
   netoEl.textContent = fmt(tot.neto);
   netoEl.style.color = tot.neto >= 0 ? 'var(--ok)' : 'var(--danger)';
   document.getElementById('pat-neto-sub').textContent =
-    `Incluye ${fmt(tot.ahorros)} de ahorros + ${fmt(tot.autoCaja)} en efectivo + ${fmt(tot.autoDigital)} en digital (automáticos).`;
+    `Incluye ${fmt(tot.ahorros)} de ahorros + ${fmt(tot.autoCaja)} en efectivo + ${fmt(tot.autoDigital)} en digital` +
+    (tot.pasivosTarjetas > 0 ? ` − ${fmt(tot.pasivosTarjetas)} de tarjetas` : '') + ' (automáticos).';
 
   renderPatrimonioList('activo', 'activos-list', '🟢', 'Sin activos registrados. Toca + para agregar.');
   renderPatrimonioList('pasivo', 'pasivos-list', '🔴', 'Sin pasivos registrados. ¡Bien! O toca + para agregar una deuda.');
@@ -3526,22 +3606,32 @@ function renderPatrimonioList(kind, elId, emoji, emptyMsg) {
         </div>
         <div class="fijo-amount paid">${fmt(ah)}</div>
       </div>`;
-    const bk = accountTotals();
-    if (bk.cash > 0) autoRow += `
+    const bk = patrimonioTotals();
+    if (bk.autoCaja > 0) autoRow += `
       <div class="fijo-item" style="opacity:.85">
         <div class="fijo-info">
           <div class="f-name">Efectivo en caja 💵</div>
           <div class="f-sub">Automático · saldo en libros (movimientos ± conciliación ± traslados)</div>
         </div>
-        <div class="fijo-amount paid">${fmt(bk.cash)}</div>
+        <div class="fijo-amount paid">${fmt(bk.autoCaja)}</div>
       </div>`;
-    if (bk.digital > 0) autoRow += `
+    if (bk.autoDigital > 0) autoRow += `
       <div class="fijo-item" style="opacity:.85">
         <div class="fijo-info">
           <div class="f-name">Cuentas digitales 💳</div>
-          <div class="f-sub">Automático · saldo en libros de todas tus cuentas</div>
+          <div class="f-sub">Automático · saldo en libros de tus cuentas débito</div>
         </div>
-        <div class="fijo-amount paid">${fmt(bk.digital)}</div>
+        <div class="fijo-amount paid">${fmt(bk.autoDigital)}</div>
+      </div>`;
+  } else {
+    const deudaTc = patrimonioTotals().pasivosTarjetas;
+    if (deudaTc > 0) autoRow += `
+      <div class="fijo-item" style="opacity:.85">
+        <div class="fijo-info">
+          <div class="f-name">Tarjetas de crédito 💳</div>
+          <div class="f-sub">Automático · lo que debes en tus tarjetas</div>
+        </div>
+        <div class="fijo-amount" style="color:var(--danger)">${fmt(deudaTc)}</div>
       </div>`;
   }
 
@@ -4669,6 +4759,24 @@ async function migrarPresupuestos() {
   for (const v of viejos) await deletePresupuesto(v.id);
 }
 
+// Pagos de gastos fijos y cuotas registrados SIN descontar del saldo (se
+// pagaron antes de anotarlos): no crean movimiento, pero son gasto del mes
+// en que se pagaron, así que también cuentan en el presupuesto.
+function gastosSinMovimiento(month, year) {
+  const out = [];
+  fijos.forEach(f => (f.pagos || []).forEach(x => {
+    if (!x.sinMovimiento || !isSameMonth(x.fecha, month, year)) return;
+    out.push({ category: f.category, amount: Number(x.monto) || Number(f.amount) || 0, date: x.fecha,
+               notes: 'Pago gasto fijo: ' + f.name + ' (sin descontar del saldo)' });
+  }));
+  prestamos.forEach(pr => (pr.pagos || []).forEach(x => {
+    if (!x.sinMovimiento || !isSameMonth(x.fecha, month, year)) return;
+    out.push({ category: 'Pago de préstamo', amount: Number(x.monto) || 0, date: x.fecha,
+               notes: 'Cuota préstamo: ' + pr.name + ' (sin descontar del saldo)' });
+  }));
+  return out;
+}
+
 // Gasto por categoría en un mes, en una sola pasada. excluirId deja
 // fuera un movimiento (el que se está editando).
 function gastoPorCategoria(month, year, excluirId) {
@@ -4678,6 +4786,7 @@ function gastoPorCategoria(month, year, excluirId) {
     if (t.type !== 'expense' || t.id === excluirId || !isSameMonth(t.date, month, year)) continue;
     m.set(t.category, (m.get(t.category) || 0) + (Number(t.amount) || 0));
   }
+  gastosSinMovimiento(month, year).forEach(g => m.set(g.category, (m.get(g.category) || 0) + g.amount));
   return m;
 }
 
@@ -4737,7 +4846,39 @@ function presupuestoBarraHTML(r, month, year) {
 function gastosDeCategoria(cat, month, year) {
   return transactions
     .filter(t => t.type === 'expense' && t.category === cat && isSameMonth(t.date, month, year))
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    .concat(gastosSinMovimiento(month, year).filter(g => g.category === cat))
+    .sort(porFechaDesc);
+}
+
+// Mes a mes: los 6 meses hasta el seleccionado, gastado frente al tope.
+// Tocar un mes lo selecciona (cambia también el Dashboard).
+function presupuestoHistorialHTML(monto) {
+  const filas = [];
+  for (let k = 5; k >= 0; k--) {
+    const d = new Date(currentYear, currentMonth - k, 1);
+    const m = d.getMonth(), y = d.getFullYear();
+    const gastado = gastoTotalMes(m, y);
+    const pct = monto > 0 ? gastado / monto : 0;
+    const estado = estadoPresupuesto(gastado, monto);
+    const color = estado === 'excedido' ? 'red' : (estado === 'alerta' ? 'yellow' : 'green');
+    const sel = k === 0;
+    filas.push(`
+      <div class="presup-hist${sel ? ' sel' : ''}" data-mes="${m}" data-anio="${y}" role="button" tabindex="0">
+        <span class="ph-mes">${MONTHS_ES[m].slice(0, 3)} ${String(y).slice(2)}</span>
+        <div class="prog-bar"><div class="prog-fill ${color}" style="width:${Math.min(100, Math.round(pct * 100))}%"></div></div>
+        <strong>${fmt(gastado)}</strong>
+        <span class="ph-pct">${Math.round(pct * 100)} %</span>
+      </div>`);
+  }
+  return `<div style="font-weight:600;font-size:.82rem;margin:1rem 0 .5rem">Mes a mes</div>${filas.join('')}`;
+}
+
+function activarHistorialPresupuesto(el) {
+  el.querySelectorAll('.presup-hist').forEach(r => {
+    const ir = () => { currentMonth = +r.dataset.mes; currentYear = +r.dataset.anio; renderPage(currentPage); };
+    r.onclick = ir;
+    r.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ir(); } };
+  });
 }
 
 // "¿En qué se te va?": cada categoría con su parte del presupuesto.
@@ -4785,7 +4926,8 @@ function renderPresupuestos() {
         <button class="tx-btn edit" id="presup-editar" title="Editar" aria-label="Editar presupuesto">✏️</button>
         <button class="tx-btn del" id="presup-borrar" title="Eliminar" aria-label="Eliminar presupuesto">🗑</button>
       </span>
-    </div>` + presupuestoDesgloseHTML(r, currentMonth, currentYear);
+    </div>` + presupuestoHistorialHTML(r.monto) + presupuestoDesgloseHTML(r, currentMonth, currentYear);
+  activarHistorialPresupuesto(el);
   document.getElementById('presup-editar').onclick = () => openPresupuestoForm();
   document.getElementById('presup-borrar').onclick = () => confirmDeletePresupuesto();
 }
@@ -5150,7 +5292,8 @@ function renderInsights() {
 
   const monthTx = transactions.filter(t => isSameMonth(t.date, currentMonth, currentYear));
   const income = monthTx.filter(t => t.type === 'income').reduce((s,t) => s+t.amount, 0);
-  const varExp = monthTx.filter(t => t.type === 'expense').reduce((s,t) => s+t.amount, 0);
+  const idsFijos = txIdsDeFijos();
+  const varExp = monthTx.filter(t => t.type === 'expense' && !idsFijos.has(t.id)).reduce((s,t) => s+t.amount, 0);
   // Carga mensual prorrateada (un anual aporta 1/12 al mes, no su total).
   const fixedTotal = fijosMensualRequerido();
   const saving = monthTx.filter(t => t.type === 'saving').reduce((s,t) => s+t.amount, 0);
@@ -5351,6 +5494,10 @@ function openTxForm(type, existing) {
   const cats = catsForType(type);
   const today = todayISO();
   const t = existing || { amount:'', date: today, category: cats[0], account:'efectivo', notes:'' };
+  // Categorías que no están en la lista (pago de gasto fijo, "Pago de
+  // préstamo", "Préstamo recibido"): antes al editar caían en la primera
+  // opción y el movimiento cambiaba de categoría sin avisar.
+  const catsOpc = t.category && !cats.includes(t.category) ? cats.concat([t.category]) : cats;
   openModal(
     (existing ? 'Editar' : 'Nuevo') + TYPE_TITLES[type],
     `
@@ -5376,7 +5523,7 @@ function openTxForm(type, existing) {
     <div class="form-group">
       <label class="form-label">Categoría *</label>
       <select class="form-input" id="f-category">
-        ${cats.map(c => `<option ${c===t.category?'selected':''}>${c}</option>`).join('')}
+        ${catsOpc.map(c => `<option ${c===t.category?'selected':''}>${esc(c)}</option>`).join('')}
       </select>
     </div>
     <div class="form-group">
@@ -5540,9 +5687,24 @@ function openEditTx(id) {
   openTxForm(tx.type, tx);
 }
 
+// Pago de gasto fijo o cuota de préstamo dueño de un movimiento. Borrar
+// solo el movimiento dejaba el fijo "pagado" (o la deuda rebajada) sin
+// que saliera la plata: se deshace desde su sección.
+function pagoVinculadoA(txId) {
+  for (const f of fijos) {
+    if ((f.pagos || []).some(x => x.txId === txId)) return { nombre: f.name, lugar: 'Gastos fijos (toca el pago → Deshacer)' };
+  }
+  for (const pr of prestamos) {
+    if ((pr.pagos || []).some(x => x.txId === txId)) return { nombre: pr.name, lugar: 'Patrimonio → préstamo → tabla (🗑 en la cuota)' };
+  }
+  return null;
+}
+
 async function confirmDeleteTx(id) {
   const tx = transactions.find(t => t.id === id);
   if (!tx) return;
+  const vinc = pagoVinculadoA(id);
+  if (vinc) { showToast(`⚠ Es el pago de "${vinc.nombre}". Deshazlo desde ${vinc.lugar}`); return; }
   const errSaldo = validarSaldoMovimiento(null, tx);
   if (errSaldo) { showToast(errSaldo.replace('⚠ Saldo insuficiente', '⚠ No puedes eliminar este ingreso: saldo insuficiente')); return; }
   if (!(await appConfirm('¿Eliminar esta transaccion?'))) return;
@@ -6026,13 +6188,16 @@ async function importJSON(file) {
     const num = v => { const n = parseMoney(v); return Number.isFinite(n) && n >= 0 ? Math.min(n, MONTO_MAX) : 0; };
     const fechaOk = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : todayISO();
     const TIPOS = ['income', 'expense', 'saving'];
+    // Los ids van dentro de onclick="…('id')": solo letras, números, _ y -.
+    // Un respaldo manipulado con comillas en un id podía ejecutar código.
+    const idOk = v => txt(v, 40).replace(/[^A-Za-z0-9_-]/g, '');
     const ok = await appConfirm(
       `¿Importar ${data.transactions.length} transacciones, ${(data.fijos||[]).length} gastos fijos, ${(data.balances||[]).length} conciliaciones, ${(data.traslados||[]).length} traslados ${(data.prestamos||[]).length} préstamos, ${(data.presupuestos||[]).length} presupuestos y ${(data.metas||[]).length} metas? Esto reemplazará los datos actuales.`,
       'Importar'
     );
     if (!ok) return;
     const nCuentas = comoArray(data.cuentas).filter(c => c && c.id).map(c => ({
-      id: txt(c.id, 40), name: txt(c.name, 60) || 'Cuenta', entidad: txt(c.entidad, 60),
+      id: idOk(c.id), name: txt(c.name, 60) || 'Cuenta', entidad: txt(c.entidad, 60),
       // Cuentas viejas sin tipo quedan "sin modalidad" para asignarlas.
       tipo: (c.tipo === 'debito' || c.tipo === 'credito') ? c.tipo : '',
       diaCorte: Math.min(Math.max(parseInt(c.diaCorte) || 1, 1), 31),
@@ -6044,7 +6209,7 @@ async function importJSON(file) {
     const idsCuenta = new Set(nCuentas.map(c => c.id));
 
     const nMetas = comoArray(data.metas).filter(m => m && m.id).map(m => ({
-      id: txt(m.id, 40), name: txt(m.name, 60) || 'Meta',
+      id: idOk(m.id), name: txt(m.name, 60) || 'Meta',
       objetivo: num(m.objetivo),
       fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(m.fecha || '')) ? m.fecha : '',
       createdAt: Number(m.createdAt) || Date.now()
@@ -6052,23 +6217,23 @@ async function importJSON(file) {
     const idsMeta = new Set(nMetas.map(m => m.id));
 
     const nTransactions = comoArray(data.transactions).filter(t => t && t.id).map(t => ({
-      id: txt(t.id, 40),
+      id: idOk(t.id),
       type: TIPOS.includes(t.type) ? t.type : 'expense',
       amount: num(t.amount),
       date: fechaOk(t.date),
       category: txt(t.category, 60) || 'Otros gastos',
       account: t.account === 'transfer' ? 'transfer' : 'efectivo',
       // Referencia a cuenta solo si la cuenta existe: evita huerfanos.
-      cuentaId: idsCuenta.has(t.cuentaId) ? t.cuentaId : '',
+      cuentaId: idsCuenta.has(idOk(t.cuentaId)) ? idOk(t.cuentaId) : '',
       // Cuotas de tarjeta de crédito (1 = contado). Solo se conserva > 1.
       cuotas: (() => { const n = parseInt(t.cuotas); return (Number.isFinite(n) && n > 1) ? Math.min(n, 120) : 1; })(),
       notes: txt(t.notes, 200),
       // Aporte a una meta de ahorro: solo en ahorros y si la meta existe.
-      metaId: (t.type === 'saving' && idsMeta.has(t.metaId)) ? t.metaId : ''
+      metaId: (t.type === 'saving' && idsMeta.has(idOk(t.metaId))) ? idOk(t.metaId) : ''
     })).filter(t => t.amount > 0);
 
     const nFijos = comoArray(data.fijos).filter(f => f && f.id).map(f => ({
-      id: txt(f.id, 40), name: txt(f.name, 80) || 'Gasto fijo',
+      id: idOk(f.id), name: txt(f.name, 80) || 'Gasto fijo',
       amount: num(f.amount), category: txt(f.category, 60) || 'Otros fijos',
       dias: Math.min(Math.max(parseInt(f.dias) || 30, 1), 366),
       diaPago: Math.min(Math.max(parseInt(f.diaPago) || 1, 1), 31),
@@ -6076,43 +6241,44 @@ async function importJSON(file) {
       pagos: Array.isArray(f.pagos) ? f.pagos.slice(0, 500).map(p => ({
         fecha: fechaOk(p && p.fecha), vencia: txt(p && p.vencia, 10),
         metodo: (p && p.metodo) === 'digital' ? 'digital' : 'efectivo',
-        cuentaId: idsCuenta.has(p && p.cuentaId) ? p.cuentaId : '',
-        txId: txt(p && p.txId, 40), registradoEl: txt(p && p.registradoEl, 10),
-        sinMovimiento: !!(p && p.sinMovimiento)
+        cuentaId: idsCuenta.has(idOk(p && p.cuentaId)) ? idOk(p && p.cuentaId) : '',
+        txId: idOk(p && p.txId), registradoEl: txt(p && p.registradoEl, 10),
+        sinMovimiento: !!(p && p.sinMovimiento), monto: num(p && p.monto)
       })) : []
     })).filter(f => f.amount > 0);
 
     const nBalances = comoArray(data.balances).filter(b => b && b.id).map(b => ({
-      id: txt(b.id, 40), account: b.account === 'transfer' ? 'transfer' : 'efectivo',
-      cuentaId: idsCuenta.has(b.cuentaId) ? b.cuentaId : '',
+      id: idOk(b.id), account: b.account === 'transfer' ? 'transfer' : 'efectivo',
+      cuentaId: idsCuenta.has(idOk(b.cuentaId)) ? idOk(b.cuentaId) : '',
       previousAmount: num(b.previousAmount), amount: num(b.amount),
-      diff: Number.isFinite(Number(b.diff)) ? Number(b.diff) : 0,
+      diff: Number.isFinite(Number(b.diff)) ? Math.max(-MONTO_MAX, Math.min(MONTO_MAX, Number(b.diff))) : 0,
       date: fechaOk(b.date), notes: txt(b.notes, 200),
       createdAt: Number(b.createdAt) || Date.now()
     }));
 
     const nPatrimonio = comoArray(data.patrimonio).filter(p => p && p.id).map(p => ({
-      id: txt(p.id, 40), kind: p.kind === 'pasivo' ? 'pasivo' : 'activo',
+      id: idOk(p.id), kind: p.kind === 'pasivo' ? 'pasivo' : 'activo',
       name: txt(p.name, 80) || 'Registro', amount: num(p.amount),
       category: txt(p.category, 60) || 'Otro activo', notes: txt(p.notes, 200)
     })).filter(p => p.amount > 0);
-    const epOk = v => v === 'efectivo' || v === 'transfer' || (typeof v === 'string' && v.indexOf('cuenta:') === 0 && idsCuenta.has(v.slice(7)));
+    const epOk = v => v === 'efectivo' || v === 'transfer' || (typeof v === 'string' && v.indexOf('cuenta:') === 0 && idsCuenta.has(idOk(v.slice(7))));
+    const epNorm = v => v.indexOf('cuenta:') === 0 ? 'cuenta:' + idOk(v.slice(7)) : v;
     const nTraslados = comoArray(data.traslados).filter(tr => tr && tr.id).map(tr => ({
-      id: txt(tr.id, 40),
+      id: idOk(tr.id),
       amount: num(tr.amount),
-      from: epOk(tr.from) ? tr.from : 'efectivo',
-      to: epOk(tr.to) ? tr.to : 'transfer',
+      from: epOk(tr.from) ? epNorm(tr.from) : 'efectivo',
+      to: epOk(tr.to) ? epNorm(tr.to) : 'transfer',
       date: fechaOk(tr.date), notes: txt(tr.notes, 200),
       createdAt: Number(tr.createdAt) || Date.now()
     })).filter(tr => tr.amount > 0 && tr.from !== tr.to);
     const nPrestamos = comoArray(data.prestamos).filter(pr => pr && pr.id).map(pr => ({
-      id: txt(pr.id, 40), name: txt(pr.name, 80) || 'Préstamo',
+      id: idOk(pr.id), name: txt(pr.name, 80) || 'Préstamo',
       entidad: txt(pr.entidad, 60), tasa: txt(pr.tasa, 10),
       initialAmount: num(pr.initialAmount), cuota: num(pr.cuota),
       totalCuotas: Math.min(Math.max(parseInt(pr.totalCuotas) || 12, 1), 360),
       diaPago: Math.min(Math.max(parseInt(pr.diaPago) || 10, 1), 31),
       startDate: fechaOk(pr.startDate), notes: txt(pr.notes, 200),
-      desembolsoEndpoint: txt(pr.desembolsoEndpoint, 60), desembolsoTxId: txt(pr.desembolsoTxId, 40),
+      desembolsoEndpoint: txt(pr.desembolsoEndpoint, 60), desembolsoTxId: idOk(pr.desembolsoTxId),
       createdAt: Number(pr.createdAt) || Date.now(),
       pagos: Array.isArray(pr.pagos) ? pr.pagos.slice(0, 500).map(x => {
         const pmonto = num(x && x.monto);
@@ -6123,8 +6289,8 @@ async function importJSON(file) {
           fecha: fechaOk(x && x.fecha), monto: pmonto,
           interes: pinteres, capital: Math.max(0, pmonto - pinteres),
           metodo: (x && x.metodo) === 'digital' ? 'digital' : 'efectivo',
-          cuentaId: idsCuenta.has(x && x.cuentaId) ? x.cuentaId : '',
-          txId: txt(x && x.txId, 40), registradoEl: txt(x && x.registradoEl, 10),
+          cuentaId: idsCuenta.has(idOk(x && x.cuentaId)) ? idOk(x && x.cuentaId) : '',
+          txId: idOk(x && x.txId), registradoEl: txt(x && x.registradoEl, 10),
           sinMovimiento: !!(x && x.sinMovimiento)
         };
       }) : []
@@ -6133,7 +6299,7 @@ async function importJSON(file) {
     // viejas se suman en uno general con migrarPresupuestos).
     const catsVistas = new Set();
     const nPresupuestos = comoArray(data.presupuestos).filter(pp => pp && pp.id).map(pp => ({
-      id: txt(pp.id, 40), category: txt(pp.category, 60), monto: num(pp.monto)
+      id: idOk(pp.id), category: txt(pp.category, 60), monto: num(pp.monto)
     })).filter(pp => pp.category && pp.monto > 0 && !catsVistas.has(pp.category) && catsVistas.add(pp.category));
 
     // Todo validado: ahora sí se reemplaza. Antes solo se agregaban
@@ -6172,7 +6338,9 @@ function computeReport() {
 
   // ── Estado de Resultados (flujo del periodo) ──
   const ingresos = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const gastosVariables = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  // Sin los pagos de gastos fijos: esos ya van en gastosFijos (prorrateado).
+  const idsFijos = txIdsDeFijos();
+  const gastosVariables = monthTx.filter(t => t.type === 'expense' && !idsFijos.has(t.id)).reduce((s, t) => s + t.amount, 0);
   // Prorrateado: el Estado de Resultados cubre un mes, no el ano completo.
   const gastosFijos = fijosMensualRequerido();
   // Criterio contable: la cuota del prestamo mueve caja completa, pero al
@@ -6193,6 +6361,7 @@ function computeReport() {
   if (pt.autoDigital > 0) activosItems.push({ name: 'Cuentas digitales', cat: 'Automático · saldo en libros', amount: pt.autoDigital });
   const pasivosItems = patrimonio.filter(p => p.kind === 'pasivo').map(p => ({ name: p.name, cat: p.category, amount: p.amount }))
     .concat(prestamos.filter(p => prestamoSaldo(p) > 0).map(p => ({ name: '🏦 ' + p.name, cat: (p.entidad || 'Préstamo') + ' · cuota ' + (prestamoNPagadas(p) + 1) + '/' + p.totalCuotas, amount: prestamoSaldo(p) })));
+  if (pt.pasivosTarjetas > 0) pasivosItems.push({ name: '💳 Tarjetas de crédito', cat: 'Automático · deuda en libros', amount: pt.pasivosTarjetas });
 
   // ── Métricas de decisión ──
   const endeudamiento = pt.activos > 0 ? (pt.pasivos / pt.activos) * 100 : 0;
@@ -6642,6 +6811,18 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 // Theme
 document.getElementById('theme-toggle-sidebar').addEventListener('click', toggleTheme);
 document.getElementById('theme-toggle-mobile').addEventListener('click', toggleTheme);
+
+// Si la app queda abierta y cambia el mes, al volver se pasa al mes nuevo
+// (solo si estabas viendo el que estaba en curso).
+let _mesHoy = new Date().getMonth(), _anioHoy = new Date().getFullYear();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const n = new Date();
+  if (n.getMonth() === _mesHoy && n.getFullYear() === _anioHoy) return;
+  if (currentMonth === _mesHoy && currentYear === _anioHoy) { currentMonth = n.getMonth(); currentYear = n.getFullYear(); }
+  _mesHoy = n.getMonth(); _anioHoy = n.getFullYear();
+  renderPage(currentPage);
+});
 
 // Month nav
 document.getElementById('prev-month').addEventListener('click', () => {
