@@ -361,6 +361,12 @@ a{text-decoration:none;color:inherit}
 .rule-row:last-child{margin-bottom:0}
 .rule-labels{display:flex;justify-content:space-between;font-size:.78rem;color:var(--text2);margin-bottom:.3rem}
 .rule-labels strong{color:var(--text);font-weight:600}
+.presup-cat summary{list-style:none;cursor:pointer}
+.presup-cat summary::-webkit-details-marker{display:none}
+.presup-movs{margin-top:.4rem;padding-left:.6rem;border-left:2px solid var(--border)}
+.presup-mov{display:flex;justify-content:space-between;gap:.5rem;font-size:.75rem;color:var(--text2);padding:.15rem 0}
+.presup-mov span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.presup-mov strong{color:var(--text);font-weight:600;white-space:nowrap}
 
 /* Ant alert */
 .ant-alert{
@@ -765,11 +771,11 @@ body.modal-open{overflow:hidden}
       <div id="dash-oro-list"></div>
     </div>
 
-    <!-- Presupuestos que llegaron al 80 % o lo superaron -->
+    <!-- Presupuesto general del mes: avance y en qué se va -->
     <div class="card card-sm" id="dash-presup-card" style="display:none;margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
-        <div style="font-weight:600;font-size:.85rem">🎯 Presupuestos en alerta</div>
-        <span style="font-size:.78rem;color:var(--text2);cursor:pointer" onclick="goToPage('insights')">Ver todos →</span>
+        <div style="font-weight:600;font-size:.85rem">🎯 Presupuesto del mes</div>
+        <span style="font-size:.78rem;color:var(--text2);cursor:pointer" onclick="goToPage('insights')">Ver detalle →</span>
       </div>
       <div id="dash-presup-list"></div>
     </div>
@@ -1043,14 +1049,14 @@ body.modal-open{overflow:hidden}
         <button class="icon-btn hamburger" id="hamburger4">☰</button>
         <h1>Insights</h1>
       </div>
-      <button class="icon-btn" id="add-btn-presupuesto" title="Nuevo presupuesto" aria-label="Nuevo presupuesto">＋</button>
+      <button class="icon-btn" id="add-btn-presupuesto" title="Presupuesto del mes" aria-label="Definir o editar presupuesto">＋</button>
     </div>
 
-    <!-- Presupuestos por categoría (mes seleccionado en el Dashboard) -->
+    <!-- Presupuesto general (mes seleccionado en el Dashboard) y desglose por categoría -->
     <div class="insight-card">
       <div class="i-head">
         <div class="i-icon" style="background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent-text)">🎯</div>
-        <span style="flex:1">Presupuestos · <span id="presup-mes">—</span></span>
+        <span style="flex:1">Presupuesto · <span id="presup-mes">—</span></span>
       </div>
       <div id="presup-list"></div>
     </div>
@@ -1735,6 +1741,7 @@ async function loadData() {
   prestamos = await dbGet('prestamos');
   presupuestos = await dbGet('presupuestos');
   metas = await dbGet('metas');
+  await migrarPresupuestos();
 }
 
 async function saveTransaction(tx) {
@@ -2892,7 +2899,7 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
   }
 
   try {
-    let txId = '';
+    let txId = '', avisoPresup = '';
     if (generaMovimiento) {
       const tx = {
         id: uid(), type: 'expense', amount: f.amount, date: fechaMovimiento,
@@ -2900,6 +2907,7 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
         cuentaId: metodo === 'digital' ? cuentaId : '',
         notes: 'Pago gasto fijo: ' + f.name + (fecha !== fechaMovimiento ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
       };
+      avisoPresup = avisoPresupuesto(tx);
       await saveTransaction(tx);
       txId = tx.id;
     }
@@ -2913,7 +2921,9 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
     await saveFijo(actualizado);
 
     closeModal();
-    showToast(generaMovimiento
+    // Si el pago deja el presupuesto en 80 %+ o pasado, ese aviso manda.
+    showToast(avisoPresup && !avisoPresup.startsWith('✅') ? avisoPresup
+      : generaMovimiento
       ? `✅ Pagado · ${metodo === 'digital' ? cuentaName(cuentaId) : 'Efectivo'} −${fmt(f.amount)}`
       : `✅ Registrado · sin descontar del saldo`);
     renderPage(currentPage);
@@ -4248,7 +4258,7 @@ async function registrarPagoPrestamo(id) {
   if (!acc) { showToast('⚠ Elige de dónde sale la plata'); return; }
   _pagoPrestamoEnCurso = true;
   try {
-    let txId = '';
+    let txId = '', avisoPresup = '';
     let metodo = 'efectivo', cuentaId = '';
     if (acc.account === 'efectivo') { metodo = 'efectivo'; }
     else { metodo = 'digital'; cuentaId = acc.cuentaId; }
@@ -4260,6 +4270,7 @@ async function registrarPagoPrestamo(id) {
         category: 'Pago de préstamo', account: acc.account, cuentaId: acc.cuentaId,
         notes: 'Cuota préstamo: ' + p.name + ` (capital ${fmt(capital)} + interés ${fmt(interes)})` + (fecha !== todayISO() ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
       };
+      avisoPresup = avisoPresupuesto(tx);
       await saveTransaction(tx);
       txId = tx.id;
     }
@@ -4272,7 +4283,9 @@ async function registrarPagoPrestamo(id) {
     await savePrestamo(actualizado);
     closeModal();
     const queda = saldo - capital;
-    showToast(queda <= 0 ? '🎉 ¡Préstamo saldado!' : `✅ Cuota: capital ${fmt(capital)} + interés ${fmt(interes)} · restan ${fmt(queda)}`);
+    showToast(queda <= 0 ? '🎉 ¡Préstamo saldado!'
+      : avisoPresup && !avisoPresup.startsWith('✅') ? avisoPresup
+      : `✅ Cuota: capital ${fmt(capital)} + interés ${fmt(interes)} · restan ${fmt(queda)}`);
     renderPage(currentPage);
   } catch (e) {
     console.error('Error registrando pago de prestamo:', e);
@@ -4618,12 +4631,15 @@ function renderAvisoNegativos() {
 }
 
 /* ─────────────────────────────────────────────────────────
-   PRESUPUESTOS POR CATEGORÍA
-   Tope mensual de gasto por categoría. El avance son los gastos
-   del mes seleccionado en esa categoría (compras con tarjeta de
-   crédito incluidas: también son gasto). Alerta al 80 % y al 100 %.
+   PRESUPUESTO GENERAL DEL MES
+   Un solo tope mensual para todo el gasto. Cuenta cada gasto del
+   mes seleccionado (variables, gastos fijos pagados, cuotas de
+   préstamo y compras con tarjeta de crédito), avisa al 80 % y al
+   pasarse, y muestra en qué categorías se va la plata.
+   Se guarda como un único registro { id: 'general', category: 'General', monto }.
 ───────────────────────────────────────────────────────── */
 const PRESUP_AVISO = 0.8;
+const PRESUP_ID = 'general';
 
 async function savePresupuesto(item) {
   await dbPut('presupuestos', item);
@@ -4634,6 +4650,23 @@ async function savePresupuesto(item) {
 async function deletePresupuesto(id) {
   await dbDelete('presupuestos', id);
   presupuestos = presupuestos.filter(x => x.id !== id);
+}
+
+function presupuestoGeneral() {
+  const p = presupuestos.find(x => x.id === PRESUP_ID);
+  return p ? (Number(p.monto) || 0) : 0;
+}
+
+// Versiones anteriores tenían un tope por categoría: se suman en uno
+// solo general (mismo total que ya habías decidido gastar).
+async function migrarPresupuestos() {
+  const viejos = presupuestos.filter(x => x.id !== PRESUP_ID);
+  if (!viejos.length) return;
+  if (!presupuestoGeneral()) {
+    const suma = viejos.reduce((s, x) => s + (Number(x.monto) || 0), 0);
+    if (suma > 0) await savePresupuesto({ id: PRESUP_ID, category: 'General', monto: suma });
+  }
+  for (const v of viejos) await deletePresupuesto(v.id);
 }
 
 // Gasto por categoría en un mes, en una sola pasada. excluirId deja
@@ -4648,150 +4681,164 @@ function gastoPorCategoria(month, year, excluirId) {
   return m;
 }
 
+function gastoTotalMes(month, year, excluirId) {
+  let s = 0;
+  gastoPorCategoria(month, year, excluirId).forEach(v => { s += v; });
+  return s;
+}
+
 function estadoPresupuesto(gastado, monto) {
   const pct = monto > 0 ? gastado / monto : 0;
-  if (pct >= 1) return 'excedido';
+  if (pct > 1) return 'excedido';
   if (pct >= PRESUP_AVISO) return 'alerta';
   return 'ok';
 }
 
-// Filas listas para pintar, la más consumida primero.
-function presupuestosDelMes(month, year) {
-  const gastos = gastoPorCategoria(month, year);
-  return presupuestos.map(p => {
-    const monto = Number(p.monto) || 0;
-    const gastado = gastos.get(p.category) || 0;
-    return {
-      id: p.id, category: p.category, monto, gastado,
-      pct: monto > 0 ? gastado / monto : 0,
-      estado: estadoPresupuesto(gastado, monto)
-    };
-  }).sort((a, b) => b.pct - a.pct);
+function resumenPresupuesto(month, year) {
+  const monto = presupuestoGeneral();
+  const cats = gastoPorCategoria(month, year);
+  let gastado = 0;
+  cats.forEach(v => { gastado += v; });
+  return {
+    monto, gastado, pct: monto > 0 ? gastado / monto : 0, resto: monto - gastado,
+    estado: estadoPresupuesto(gastado, monto),
+    categorias: [...cats.entries()].map(([category, valor]) => ({ category, valor })).sort((a, b) => b.valor - a.valor)
+  };
 }
 
-function presupuestoFilaHTML(r, conAcciones) {
+// Barra principal: gastado / tope, cuánto queda y cuánto se puede gastar por día.
+function presupuestoBarraHTML(r, month, year) {
   const color = r.estado === 'excedido' ? 'red' : (r.estado === 'alerta' ? 'yellow' : 'green');
-  const resto = r.monto - r.gastado;
-  const detalle = resto >= 0
-    ? `Te quedan ${fmt(resto)}`
-    : `<span style="color:var(--danger-text);font-weight:600">Te pasaste ${fmt(-resto)}</span>`;
+  const detalle = r.resto >= 0
+    ? `Te quedan <strong style="color:var(--text)">${fmt(r.resto)}</strong>`
+    : `<span style="color:var(--danger-text);font-weight:600">Te pasaste ${fmt(-r.resto)}</span>`;
   const badge = r.estado === 'excedido' ? '<span class="badge overdue">Superado</span>'
     : (r.estado === 'alerta' ? '<span class="badge unpaid">80 %+</span>' : '');
-  const acciones = conAcciones ? `
-        <span class="tx-actions">
-          <button class="tx-btn edit" data-presup="${esc(r.id)}" title="Editar" aria-label="Editar presupuesto de ${esc(r.category)}">✏️</button>
-          <button class="tx-btn del" data-presup="${esc(r.id)}" title="Eliminar" aria-label="Eliminar presupuesto de ${esc(r.category)}">🗑</button>
-        </span>` : '';
+  // Ritmo diario solo para el mes en curso y si aún queda plata.
+  let porDia = '';
+  const hoy = new Date();
+  if (r.resto > 0 && month === hoy.getMonth() && year === hoy.getFullYear()) {
+    const diasRestantes = new Date(year, month + 1, 0).getDate() - hoy.getDate() + 1;
+    porDia = `<div style="font-size:.75rem;color:var(--text2);margin-top:.3rem">Puedes gastar unos ${fmt(Math.floor(r.resto / diasRestantes))} por día en los ${diasRestantes} días que faltan.</div>`;
+  }
   return `
     <div class="rule-row">
       <div class="rule-labels" style="align-items:center;gap:.5rem">
-        <span style="display:flex;align-items:center;gap:.4rem;min-width:0">${esc(r.category)} ${badge}</span>
+        <span style="display:flex;align-items:center;gap:.4rem">Gastado ${badge}</span>
         <strong style="white-space:nowrap">${fmt(r.gastado)} / ${fmt(r.monto)}</strong>
       </div>
       <div class="prog-bar"><div class="prog-fill ${color}" style="width:${Math.min(100, Math.round(r.pct * 100))}%"></div></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;font-size:.75rem;color:var(--text2)">
-        <span>${Math.round(r.pct * 100)} % usado · ${detalle}</span>${acciones}
-      </div>
+      <div style="font-size:.75rem;color:var(--text2)">${Math.round(r.pct * 100)} % usado · ${detalle}</div>
+      ${porDia}
     </div>`;
+}
+
+// Movimientos de una categoría en el mes, el más reciente primero.
+function gastosDeCategoria(cat, month, year) {
+  return transactions
+    .filter(t => t.type === 'expense' && t.category === cat && isSameMonth(t.date, month, year))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+
+// "¿En qué se te va?": cada categoría con su parte del presupuesto.
+// Con limite (Dashboard) solo las primeras; sin él, cada una se
+// despliega para ver los gastos que la componen.
+function presupuestoDesgloseHTML(r, month, year, limite) {
+  if (!r.categorias.length) return '<p class="muted" style="margin-top:.75rem">Aún no hay gastos este mes.</p>';
+  const base = r.monto > 0 ? r.monto : r.gastado;
+  const filas = (limite ? r.categorias.slice(0, limite) : r.categorias).map(c => {
+    const pctGasto = r.gastado > 0 ? Math.round(c.valor / r.gastado * 100) : 0;
+    const cabecera = `
+        <div class="rule-labels" style="align-items:center;gap:.5rem;margin-bottom:.25rem">
+          <span style="min-width:0">${esc(c.category)} · ${pctGasto} %</span>
+          <strong style="white-space:nowrap">${fmt(c.valor)}</strong>
+        </div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${base > 0 ? Math.min(100, Math.round(c.valor / base * 100)) : 0}%;background:var(--accent)"></div></div>`;
+    if (limite) return `<div class="rule-row">${cabecera}</div>`;
+    const items = gastosDeCategoria(c.category, month, year).map(t => `
+          <div class="presup-mov">
+            <span>${esc(fechaCorta(t.date))}${t.notes ? ' · ' + esc(t.notes) : ''}</span>
+            <strong>${fmt(t.amount)}</strong>
+          </div>`).join('');
+    return `<details class="rule-row presup-cat"><summary>${cabecera}</summary><div class="presup-movs">${items}</div></details>`;
+  }).join('');
+  const mas = limite && r.categorias.length > limite
+    ? `<div style="font-size:.75rem;color:var(--text2)">y ${r.categorias.length - limite} categoría(s) más</div>` : '';
+  return `<div style="font-weight:600;font-size:.82rem;margin:1rem 0 .6rem">¿En qué se te va?</div>${filas}${mas}`;
 }
 
 function renderPresupuestos() {
   document.getElementById('presup-mes').textContent = MONTHS_ES[currentMonth] + ' ' + currentYear;
   const el = document.getElementById('presup-list');
-  if (!presupuestos.length) {
+  const r = resumenPresupuesto(currentMonth, currentYear);
+  if (!r.monto) {
     el.innerHTML = `
-      <p class="muted" style="margin-bottom:.75rem">Ponle un tope mensual a tus categorías de gasto (comida, transporte…). Kasa te avisa al llegar al 80 % y al pasarte.</p>
-      <button class="btn-primary" id="presup-crear">＋ Crear presupuesto</button>`;
+      <p class="muted" style="margin-bottom:.75rem">Define cuánto quieres gastar en total al mes. Kasa suma cada gasto, te avisa al llegar al 80 % y si te pasas, y te muestra en qué se te va la plata.</p>
+      <button class="btn-primary" id="presup-crear">＋ Definir presupuesto</button>
+      ${presupuestoDesgloseHTML(r, currentMonth, currentYear)}`;
     document.getElementById('presup-crear').onclick = () => openPresupuestoForm();
     return;
   }
-  const filas = presupuestosDelMes(currentMonth, currentYear);
-  const totMonto = filas.reduce((s, r) => s + r.monto, 0);
-  const totGastado = filas.reduce((s, r) => s + r.gastado, 0);
-  el.innerHTML = filas.map(r => presupuestoFilaHTML(r, true)).join('') + `
-    <div class="rule-labels" style="margin-top:.75rem;padding-top:.6rem;border-top:1px solid var(--border)">
-      <span>Total presupuestado</span><strong>${fmt(totGastado)} / ${fmt(totMonto)}</strong>
-    </div>`;
-  el.querySelectorAll('.tx-btn.edit[data-presup]').forEach(b => {
-    b.onclick = () => openPresupuestoForm(presupuestos.find(p => p.id === b.dataset.presup));
-  });
-  el.querySelectorAll('.tx-btn.del[data-presup]').forEach(b => {
-    b.onclick = () => confirmDeletePresupuesto(b.dataset.presup);
-  });
+  el.innerHTML = presupuestoBarraHTML(r, currentMonth, currentYear) + `
+    <div style="display:flex;justify-content:flex-end">
+      <span class="tx-actions">
+        <button class="tx-btn edit" id="presup-editar" title="Editar" aria-label="Editar presupuesto">✏️</button>
+        <button class="tx-btn del" id="presup-borrar" title="Eliminar" aria-label="Eliminar presupuesto">🗑</button>
+      </span>
+    </div>` + presupuestoDesgloseHTML(r, currentMonth, currentYear);
+  document.getElementById('presup-editar').onclick = () => openPresupuestoForm();
+  document.getElementById('presup-borrar').onclick = () => confirmDeletePresupuesto();
 }
 
-// Tarjeta del Dashboard: solo los presupuestos en 80 % o más.
+// Tarjeta del Dashboard: siempre visible si hay presupuesto, con las
+// 3 categorías donde más se ha gastado.
 function renderAlertasPresupuesto() {
   const card = document.getElementById('dash-presup-card');
-  const filas = presupuestosDelMes(currentMonth, currentYear).filter(r => r.estado !== 'ok');
-  if (!filas.length) { card.style.display = 'none'; return; }
+  const r = resumenPresupuesto(currentMonth, currentYear);
+  if (!r.monto) { card.style.display = 'none'; return; }
   card.style.display = 'block';
-  document.getElementById('dash-presup-list').innerHTML = filas.slice(0, 4).map(r => presupuestoFilaHTML(r, false)).join('');
+  document.getElementById('dash-presup-list').innerHTML =
+    presupuestoBarraHTML(r, currentMonth, currentYear) + presupuestoDesgloseHTML(r, currentMonth, currentYear, 3);
 }
 
-// Categorías de gasto más las que ya existen en movimientos (ej. "Pago de préstamo").
-function categoriasPresupuestables() {
-  const set = new Set(EXPENSE_CATS);
-  transactions.forEach(t => { if (t.type === 'expense' && t.category) set.add(t.category); });
-  return [...set];
-}
-
-// Promedio mensual de los 3 meses anteriores al seleccionado: referencia
-// para elegir un tope realista.
-function promedioGastoCategoria(cat) {
+// Promedio de gasto total de los 3 meses anteriores al seleccionado:
+// referencia para elegir un tope realista.
+function promedioGastoMensual() {
   let suma = 0;
   for (let k = 1; k <= 3; k++) {
     const d = new Date(currentYear, currentMonth - k, 1);
-    suma += gastoPorCategoria(d.getMonth(), d.getFullYear()).get(cat) || 0;
+    suma += gastoTotalMes(d.getMonth(), d.getFullYear());
   }
   return Math.round(suma / 3);
 }
 
-function openPresupuestoForm(existing) {
-  const usadas = new Set(presupuestos.filter(p => !existing || p.id !== existing.id).map(p => p.category));
-  const cats = categoriasPresupuestables().filter(c => !usadas.has(c));
-  if (!cats.length) { showToast('Ya tienes presupuesto en todas las categorías'); return; }
-  const actual = existing ? existing.category : cats[0];
-  openModal((existing ? 'Editar' : 'Nuevo') + ' presupuesto', `
+function openPresupuestoForm() {
+  const actual = presupuestoGeneral();
+  const prom = promedioGastoMensual();
+  openModal((actual ? 'Editar' : 'Definir') + ' presupuesto', `
     <div class="form-group">
-      <label class="form-label" for="pp-cat">Categoría *</label>
-      <select class="form-input" id="pp-cat">
-        ${cats.map(c => `<option value="${esc(c)}" ${c === actual ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label" for="pp-monto">Tope mensual *</label>
+      <label class="form-label" for="pp-monto">¿Cuánto quieres gastar al mes? *</label>
       <input class="form-input" type="text" inputmode="numeric" data-money id="pp-monto"
-             placeholder="$ 0" value="${existing ? fmtInput(existing.monto) : ''}">
-      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem" id="pp-sugerencia"></div>
+             placeholder="$ 0" value="${actual ? fmtInput(actual) : ''}">
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+        ${prom > 0 ? `En los últimos 3 meses gastaste en promedio ${fmt(prom)} al mes.` : 'Cuenta todos tus gastos: variables, gastos fijos pagados, cuotas y compras con tarjeta.'}
+      </div>
     </div>
-    <button class="btn-primary" id="pp-guardar">${existing ? 'Guardar cambios' : 'Crear presupuesto'}</button>
+    <button class="btn-primary" id="pp-guardar">${actual ? 'Guardar cambios' : 'Guardar presupuesto'}</button>
   `);
-  const sel = document.getElementById('pp-cat');
-  const sugerir = () => {
-    const prom = promedioGastoCategoria(sel.value);
-    document.getElementById('pp-sugerencia').textContent = prom > 0
-      ? `En los últimos 3 meses gastaste en promedio ${fmt(prom)} al mes en esta categoría.`
-      : 'Sin gastos en esta categoría en los últimos 3 meses.';
-  };
-  sel.onchange = sugerir;
-  sugerir();
-  document.getElementById('pp-guardar').onclick = () => savePresupuestoForm(existing ? existing.id : '');
+  document.getElementById('pp-guardar').onclick = () => savePresupuestoForm();
 }
 
-async function savePresupuestoForm(existingId) {
-  const category = document.getElementById('pp-cat').value;
+async function savePresupuestoForm() {
   const monto = moneyVal('pp-monto');
   const errMonto = validarMonto(monto);
   if (errMonto) { showToast(errMonto); return; }
-  if (presupuestos.some(p => p.category === category && p.id !== existingId)) {
-    showToast('⚠ Esa categoría ya tiene presupuesto'); return;
-  }
+  const habia = presupuestoGeneral() > 0;
   if (!tomarCandado()) return;
   try {
-    await savePresupuesto({ id: existingId || uid(), category, monto });
+    await savePresupuesto({ id: PRESUP_ID, category: 'General', monto });
     closeModal();
-    showToast(existingId ? '✏️ Presupuesto actualizado' : '✅ Presupuesto creado');
+    showToast(habia ? '✏️ Presupuesto actualizado' : '✅ Presupuesto guardado');
     renderPage(currentPage);
   } catch (e) {
     reportarError('guardar presupuesto', e);
@@ -4799,12 +4846,11 @@ async function savePresupuestoForm(existingId) {
   } finally { soltarCandado(); }
 }
 
-async function confirmDeletePresupuesto(id) {
-  const p = presupuestos.find(x => x.id === id);
-  if (!p) return;
-  if (!(await appConfirm(`¿Eliminar el presupuesto de ${esc(p.category)}? Tus gastos no se borran.`))) return;
+async function confirmDeletePresupuesto() {
+  if (!presupuestoGeneral()) return;
+  if (!(await appConfirm('¿Eliminar el presupuesto del mes? Tus gastos no se borran.'))) return;
   try {
-    await deletePresupuesto(id);
+    await deletePresupuesto(PRESUP_ID);
     showToast('🗑 Presupuesto eliminado');
     renderPage(currentPage);
   } catch (e) {
@@ -4813,22 +4859,24 @@ async function confirmDeletePresupuesto(id) {
   }
 }
 
-// Aviso al guardar un gasto que cruza el 80 % o el 100 % del tope del
-// mes de ese gasto. Devuelve el mensaje o ''.
+// Aviso en CADA gasto: cuánto queda del presupuesto del mes de ese
+// gasto, o cuánto te pasaste. Devuelve el mensaje o '' si no hay tope.
 function avisoPresupuesto(tx) {
   if (tx.type !== 'expense') return '';
-  const p = presupuestos.find(x => x.category === tx.category);
-  if (!p || !(p.monto > 0)) return '';
+  const monto = presupuestoGeneral();
+  if (!(monto > 0)) return '';
   const d = parseLocalDate(tx.date);
-  const antes = gastoPorCategoria(d.getMonth(), d.getFullYear(), tx.id).get(tx.category) || 0;
-  const despues = antes + tx.amount;
-  if (despues >= p.monto && antes < p.monto) {
-    return `🔴 Superaste el presupuesto de ${tx.category} por ${fmt(despues - p.monto)}`;
+  const antes = gastoTotalMes(d.getMonth(), d.getFullYear(), tx.id);
+  const despues = antes + (Number(tx.amount) || 0);
+  if (despues > monto) {
+    return antes <= monto
+      ? `🔴 Te pasaste del presupuesto por ${fmt(despues - monto)}`
+      : `🔴 Vas ${fmt(despues - monto)} por encima del presupuesto`;
   }
-  if (despues >= p.monto * PRESUP_AVISO && antes < p.monto * PRESUP_AVISO) {
-    return `🟡 Llevas el ${Math.round(despues / p.monto * 100)} % del presupuesto de ${tx.category}`;
+  if (despues >= monto * PRESUP_AVISO) {
+    return `🟡 Llevas el ${Math.round(despues / monto * 100)} % del presupuesto · te quedan ${fmt(monto - despues)}`;
   }
-  return '';
+  return `✅ Guardado · te quedan ${fmt(monto - despues)} del presupuesto`;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -6081,7 +6129,8 @@ async function importJSON(file) {
         };
       }) : []
     })).filter(pr => pr.initialAmount > 0 && pr.cuota > 0);
-    // Presupuestos: una sola entrada por categoría.
+    // Presupuestos: una sola entrada por categoría (los de versiones
+    // viejas se suman en uno general con migrarPresupuestos).
     const catsVistas = new Set();
     const nPresupuestos = comoArray(data.presupuestos).filter(pp => pp && pp.id).map(pp => ({
       id: txt(pp.id, 40), category: txt(pp.category, 60), monto: num(pp.monto)
@@ -6099,6 +6148,7 @@ async function importJSON(file) {
     transactions = nTransactions; fijos = nFijos; balances = nBalances; patrimonio = nPatrimonio;
     cuentas = nCuentas; traslados = nTraslados; prestamos = nPrestamos;
     presupuestos = nPresupuestos; metas = nMetas;
+    await migrarPresupuestos();
     showToast('📂 Datos importados exitosamente');
     renderPage(currentPage);
   } catch (e) {
@@ -6496,7 +6546,7 @@ function showToast(msg, accion) {
 
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), accion ? 6000 : 2500);
+  toastTimer = setTimeout(() => el.classList.remove('show'), accion ? 6000 : (msg.length > 40 ? 4000 : 2500));
 }
 
 /* Red de seguridad: ningun fallo queda invisible, pero al usuario solo

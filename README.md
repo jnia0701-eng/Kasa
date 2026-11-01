@@ -207,3 +207,20 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
   en otra pestaña durante una actualización, avisa que la cierres.
 - Datos: IndexedDB v7 y JSON versión 9 (presupuestos y metas). La migración desde
   v6 conserva todo, pero **exporta un respaldo antes de actualizar**.
+
+---
+
+## v5 · Presupuesto general del mes
+
+**🎯 Un solo presupuesto para todo**
+- En Insights defines cuánto quieres gastar en total al mes (por ejemplo $929.000);
+  ya no se elige categoría.
+- Cuenta **todos** los gastos del mes: gastos normales, gastos fijos pagados, cuotas
+  de préstamos y compras con tarjeta de crédito.
+- **Aviso en cada gasto**: al guardarlo, Kasa dice cuánto te queda; desde el 80 %
+  avisa en amarillo y, si te pasas, en rojo con cuánto vas por encima.
+- **¿En qué se te va?**: desglose por categoría con monto y porcentaje; al tocar una
+  categoría ves sus gastos uno por uno. El Dashboard muestra la barra general y las
+  3 categorías con más gasto, y en el mes en curso cuánto puedes gastar por día.
+- Si tenías presupuestos por categoría (v4), se suman solos en uno general (también
+  al importar un respaldo viejo). El formato de datos no cambia (IndexedDB v7, JSON 9).
