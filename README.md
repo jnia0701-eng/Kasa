@@ -252,3 +252,24 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 - El movimiento de un pago de fijo o cuota se deshace desde su sección, no desde
   Movimientos, para que el pago no quede marcado sin plata.
 - Importar un respaldo sanea los identificadores (seguridad).
+
+---
+
+## v7 · Fijos y cuotas apartados en el presupuesto
+
+**🎯 El presupuesto ya cuenta lo que tienes que pagar**
+- Desde el día 1, los gastos fijos y las cuotas de préstamos que vencen en el mes quedan
+  **apartados** en el presupuesto. "Te quedan" muestra solo lo libre para lo demás.
+- La barra tiene dos tramos: lo **gastado** (sólido) y lo **por pagar** (rayado).
+  Al pagar un fijo o una cuota, el monto pasa de un tramo al otro: lo que te queda
+  no cambia y nada se cuenta dos veces.
+- Lo vencido sigue apartado hasta que lo pagues. Los fijos de periodicidad mayor
+  (SOAT, impuestos) se apartan completos en el mes en que vencen; si aún no tienen
+  ningún pago registrado, no se sabe cuándo vencen y no se apartan.
+- Meses pasados: solo lo realmente gastado. Meses futuros: proyección de lo que vence.
+- "¿En qué se te va?" marca lo que falta por pagar en cada categoría y lo lista primero.
+- Al definir el tope, Kasa muestra cuánto suman tus fijos y cuotas del mes y cuánto
+  te queda para lo demás, y avisa si el tope no alcanza.
+- Pagar un fijo o una cuota que ya estaba apartado no dispara avisos de presupuesto.
+  Un abono mayor a la cuota sí avisa por la diferencia.
+- El formato de datos no cambia (IndexedDB v7, JSON 9).

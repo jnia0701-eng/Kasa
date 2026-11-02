@@ -367,6 +367,17 @@ a{text-decoration:none;color:inherit}
 .presup-mov{display:flex;justify-content:space-between;gap:.5rem;font-size:.75rem;color:var(--text2);padding:.15rem 0}
 .presup-mov span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .presup-mov strong{color:var(--text);font-weight:600;white-space:nowrap}
+/* Presupuesto: tramo gastado (sólido) + tramo por pagar (rayado, más tenue). */
+.prog-bar.split{display:flex}
+.prog-bar.split .prog-fill{border-radius:0;flex-shrink:0}
+.prog-fill.reservado,.ley.reservado{opacity:.55;background-image:repeating-linear-gradient(-45deg,transparent 0 3px,rgba(255,255,255,.5) 3px 6px)}
+.presup-leyenda{display:flex;flex-wrap:wrap;gap:.2rem .9rem;font-size:.72rem;color:var(--text2);margin-top:.3rem}
+.presup-leyenda .ley{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.3rem;vertical-align:-1px}
+.ley.green{background-color:var(--ok)}
+.ley.yellow{background-color:var(--warn)}
+.ley.red{background-color:var(--danger)}
+.presup-porpagar{font-size:.72rem;color:var(--warn-text);margin-top:-.2rem}
+.presup-mov.por-pagar span{color:var(--warn-text)}
 .presup-hist{display:grid;grid-template-columns:3.4rem 1fr auto 2.8rem;align-items:center;gap:.5rem;font-size:.75rem;color:var(--text2);padding:.2rem .3rem;border-radius:6px;cursor:pointer}
 .presup-hist .prog-bar{margin:0}
 .presup-hist strong{color:var(--text);font-weight:600;white-space:nowrap}
@@ -2976,7 +2987,7 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
         cuentaId: metodo === 'digital' ? cuentaId : '',
         notes: 'Pago gasto fijo: ' + f.name + (fecha !== fechaMovimiento ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
       };
-      avisoPresup = avisoPresupuesto(tx);
+      avisoPresup = avisoPresupuesto(tx, { fijoId: f.id });
       await saveTransaction(tx);
       txId = tx.id;
     }
@@ -4360,7 +4371,7 @@ async function registrarPagoPrestamo(id) {
         category: 'Pago de préstamo', account: acc.account, cuentaId: acc.cuentaId,
         notes: 'Cuota préstamo: ' + p.name + ` (capital ${fmt(capital)} + interés ${fmt(interes)})` + (fecha !== todayISO() ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
       };
-      avisoPresup = avisoPresupuesto(tx);
+      avisoPresup = avisoPresupuesto(tx, { prestamoId: p.id });
       await saveTransaction(tx);
       txId = tx.id;
     }
@@ -4726,6 +4737,9 @@ function renderAvisoNegativos() {
    mes seleccionado (variables, gastos fijos pagados, cuotas de
    préstamo y compras con tarjeta de crédito), avisa al 80 % y al
    pasarse, y muestra en qué categorías se va la plata.
+   Los gastos fijos y cuotas que vencen en el mes y aún no se pagan
+   quedan RESERVADOS desde el día 1 (ver compromisosPendientes), así
+   "te quedan" es solo lo libre para lo demás.
    Se guarda como un único registro { id: 'general', category: 'General', monto }.
 ───────────────────────────────────────────────────────── */
 const PRESUP_AVISO = 0.8;
@@ -4777,6 +4791,108 @@ function gastosSinMovimiento(month, year) {
   return out;
 }
 
+/* Compromisos por pagar: gastos fijos y cuotas de préstamo que vencen en
+   el mes y todavía no se pagan. El presupuesto los reserva desde el día 1.
+   Al pagar uno, su próximo vencimiento pasa al ciclo siguiente y sale de
+   aquí, mientras el pago entra como gasto: el total no cambia y nada se
+   cuenta dos veces.
+   · Mes pasado: nada (se ve solo lo realmente gastado).
+   · Mes en curso: lo que vence este mes o ya está vencido (se sigue debiendo).
+   · Mes futuro: proyección de lo que vencería ese mes.
+   · Fijos de periodicidad mayor (SOAT, impuestos): completos en el mes en
+     que vencen. Sin ningún pago registrado no se sabe cuándo vencen, así
+     que no se reservan.
+   excluir = { fijoId, prestamoId }: el que se está pagando en este momento. */
+function compromisosPendientes(month, year, excluir) {
+  const hoy = hoyLocal();
+  const mesActual = hoy.getFullYear() * 12 + hoy.getMonth();
+  const mesPedido = year * 12 + month;
+  if (mesPedido < mesActual) return [];
+  const esActual = mesPedido === mesActual;
+  const inicio = new Date(year, month, 1);
+  const fin = new Date(year, month + 1, 0);
+  const ex = excluir || {};
+  const out = [];
+
+  fijos.forEach(f => {
+    if (f.id === ex.fijoId) return;
+    const monto = Number(f.amount) || 0;
+    if (!(monto > 0)) return;
+    const meses = mesesCiclo(f);
+    const ultimo = ultimoPagoFijo(f);
+    if (!ultimo && meses > 1) return;
+    const venc = proximoVencimiento(f);
+    let fecha = null;
+    if (esActual) {
+      if (venc <= fin) fecha = venc;
+      // Mensual sin ningún pago y con el día ya pasado: el de este mes
+      // sigue sin registrar, así que también se reserva.
+      else if (!ultimo) fecha = new Date(year, month, Math.min(diaPagoDe(f), fin.getDate()));
+    } else {
+      const dia = meses <= 1 ? diaPagoDe(f) : parseLocalDate(ultimo.fecha).getDate();
+      fecha = siguienteEnMes(venc, meses, dia, inicio, fin, Infinity);
+    }
+    if (!fecha) return;
+    out.push({ tipo: 'fijo', id: f.id, category: f.category, amount: monto, date: todayISO(fecha),
+               vencido: fecha < hoy && !!ultimo, sinRegistrar: !ultimo, name: f.name });
+  });
+
+  prestamos.forEach(p => {
+    if (p.id === ex.prestamoId) return;
+    const monto = prestamoCuotaSugerida(p);
+    if (!(monto > 0)) return;
+    const venc = prestamoProximoVenc(p);
+    let fecha = null;
+    if (esActual) {
+      if (venc <= fin) fecha = venc;
+    } else {
+      const total = parseInt(p.totalCuotas) || 0;
+      const restantes = total > 0 ? Math.max(1, total - prestamoNPagadas(p)) : Infinity;
+      fecha = siguienteEnMes(venc, 1, prestamoDia(p), inicio, fin, restantes);
+    }
+    if (!fecha) return;
+    out.push({ tipo: 'prestamo', id: p.id, category: 'Pago de préstamo', amount: monto, date: todayISO(fecha),
+               vencido: fecha < hoy, name: p.name });
+  });
+
+  return out;
+}
+
+// Primer vencimiento dentro de [inicio, fin] avanzando de a "meses" desde
+// venc (cuenta venc mismo). maxCiclos limita las cuotas que quedan.
+function siguienteEnMes(venc, meses, dia, inicio, fin, maxCiclos) {
+  let d = venc;
+  for (let k = 1; d < inicio; k++) {
+    if (k >= maxCiclos || k > 400) return null;
+    d = sumarMeses(venc, k * meses, dia);
+  }
+  return d <= fin ? d : null;
+}
+
+function totalPorPagar(month, year, excluir) {
+  return compromisosPendientes(month, year, excluir).reduce((s, x) => s + x.amount, 0);
+}
+
+// Gasto real + fijos y cuotas por pagar: lo que el presupuesto compara con el tope.
+function comprometidoMes(month, year, excluirId, excluir) {
+  return gastoTotalMes(month, year, excluirId) + totalPorPagar(month, year, excluir);
+}
+
+// Lo que suman los fijos y cuotas del mes: ya pagados + por pagar.
+// Un pago cuenta en el mes de su movimiento (o de su fecha si no generó uno).
+function fijosYCuotasDelMes(month, year) {
+  const fechaTx = new Map();
+  transactions.forEach(t => fechaTx.set(t.id, t.date));
+  let pagado = 0;
+  const sumar = x => {
+    const fecha = (x.txId && fechaTx.get(x.txId)) || x.fecha;
+    if (isSameMonth(fecha, month, year)) pagado += Number(x.monto) || 0;
+  };
+  fijos.forEach(f => (f.pagos || []).forEach(sumar));
+  prestamos.forEach(p => (p.pagos || []).forEach(sumar));
+  return pagado + totalPorPagar(month, year);
+}
+
 // Gasto por categoría en un mes, en una sola pasada. excluirId deja
 // fuera un movimiento (el que se está editando).
 function gastoPorCategoria(month, year, excluirId) {
@@ -4806,48 +4922,92 @@ function estadoPresupuesto(gastado, monto) {
 function resumenPresupuesto(month, year) {
   const monto = presupuestoGeneral();
   const cats = gastoPorCategoria(month, year);
+  const pendientes = compromisosPendientes(month, year);
   let gastado = 0;
-  cats.forEach(v => { gastado += v; });
+  const porCat = new Map();
+  cats.forEach((valor, category) => {
+    gastado += valor;
+    porCat.set(category, { category, valor, porPagar: 0 });
+  });
+  let reservado = 0;
+  pendientes.forEach(x => {
+    reservado += x.amount;
+    const c = porCat.get(x.category) || { category: x.category, valor: 0, porPagar: 0 };
+    c.valor += x.amount;
+    c.porPagar += x.amount;
+    porCat.set(x.category, c);
+  });
+  const total = gastado + reservado;
   return {
-    monto, gastado, pct: monto > 0 ? gastado / monto : 0, resto: monto - gastado,
-    estado: estadoPresupuesto(gastado, monto),
-    categorias: [...cats.entries()].map(([category, valor]) => ({ category, valor })).sort((a, b) => b.valor - a.valor)
+    monto, gastado, reservado, total, pendientes,
+    pct: monto > 0 ? total / monto : 0, resto: monto - total,
+    estado: estadoPresupuesto(total, monto),
+    categorias: [...porCat.values()].sort((a, b) => b.valor - a.valor)
   };
 }
 
-// Barra principal: gastado / tope, cuánto queda y cuánto se puede gastar por día.
+function colorEstadoPresupuesto(estado) {
+  return estado === 'excedido' ? 'red' : (estado === 'alerta' ? 'yellow' : 'green');
+}
+
+// Barra en dos tramos: lo gastado (sólido) y lo reservado por pagar
+// (rayado), ambos como % de la base.
+function barraPresupuestoHTML(gastado, reservado, base, cls, estilo) {
+  const pct = v => base > 0 ? Math.max(0, v / base * 100) : 0;
+  const a = Math.min(100, pct(gastado));
+  const b = Math.min(100 - a, pct(reservado));
+  return `<div class="prog-bar split"><div class="prog-fill ${cls}" style="width:${a.toFixed(1)}%;${estilo || ''}"></div>` +
+    (b > 0 ? `<div class="prog-fill ${cls} reservado" style="width:${b.toFixed(1)}%;${estilo || ''}"></div>` : '') + '</div>';
+}
+
+// Barra principal: gastado + por pagar / tope, cuánto queda y cuánto se puede gastar por día.
 function presupuestoBarraHTML(r, month, year) {
-  const color = r.estado === 'excedido' ? 'red' : (r.estado === 'alerta' ? 'yellow' : 'green');
+  const color = colorEstadoPresupuesto(r.estado);
+  const conReserva = r.reservado > 0;
   const detalle = r.resto >= 0
-    ? `Te quedan <strong style="color:var(--text)">${fmt(r.resto)}</strong>`
+    ? `Te quedan <strong style="color:var(--text)">${fmt(r.resto)}</strong>${conReserva ? ' para lo demás' : ''}`
     : `<span style="color:var(--danger-text);font-weight:600">Te pasaste ${fmt(-r.resto)}</span>`;
   const badge = r.estado === 'excedido' ? '<span class="badge overdue">Superado</span>'
     : (r.estado === 'alerta' ? '<span class="badge unpaid">80 %+</span>' : '');
+  const n = r.pendientes.length;
+  const leyenda = conReserva ? `
+      <div class="presup-leyenda">
+        <span><i class="ley ${color}"></i>Gastado ${fmt(r.gastado)}</span>
+        <span><i class="ley ${color} reservado"></i>Por pagar ${fmt(r.reservado)} · ${n} ${n === 1 ? 'fijo o cuota' : 'fijos y cuotas'}</span>
+      </div>` : '';
   // Ritmo diario solo para el mes en curso y si aún queda plata.
   let porDia = '';
   const hoy = new Date();
   if (r.resto > 0 && month === hoy.getMonth() && year === hoy.getFullYear()) {
     const diasRestantes = new Date(year, month + 1, 0).getDate() - hoy.getDate() + 1;
-    porDia = `<div style="font-size:.75rem;color:var(--text2);margin-top:.3rem">Puedes gastar unos ${fmt(Math.floor(r.resto / diasRestantes))} por día en los ${diasRestantes} días que faltan.</div>`;
+    porDia = `<div style="font-size:.75rem;color:var(--text2);margin-top:.3rem">Puedes gastar unos ${fmt(Math.floor(r.resto / diasRestantes))} por día en los ${diasRestantes} días que faltan${conReserva ? ', ya apartados tus fijos y cuotas' : ''}.</div>`;
   }
   return `
     <div class="rule-row">
       <div class="rule-labels" style="align-items:center;gap:.5rem">
-        <span style="display:flex;align-items:center;gap:.4rem">Gastado ${badge}</span>
-        <strong style="white-space:nowrap">${fmt(r.gastado)} / ${fmt(r.monto)}</strong>
+        <span style="display:flex;align-items:center;gap:.4rem">${conReserva ? 'Gastado + por pagar' : 'Gastado'} ${badge}</span>
+        <strong style="white-space:nowrap">${fmt(r.total)} / ${fmt(r.monto)}</strong>
       </div>
-      <div class="prog-bar"><div class="prog-fill ${color}" style="width:${Math.min(100, Math.round(r.pct * 100))}%"></div></div>
-      <div style="font-size:.75rem;color:var(--text2)">${Math.round(r.pct * 100)} % usado · ${detalle}</div>
+      ${barraPresupuestoHTML(r.gastado, r.reservado, r.monto, color)}
+      <div style="font-size:.75rem;color:var(--text2)">${Math.round(r.pct * 100)} % ${conReserva ? 'comprometido' : 'usado'} · ${detalle}</div>
+      ${leyenda}
       ${porDia}
     </div>`;
 }
 
-// Movimientos de una categoría en el mes, el más reciente primero.
-function gastosDeCategoria(cat, month, year) {
-  return transactions
+// Movimientos de una categoría en el mes: primero lo que falta por pagar
+// (más próximo primero) y luego lo gastado, el más reciente primero.
+function gastosDeCategoria(cat, month, year, pendientes) {
+  const porPagar = (pendientes || [])
+    .filter(x => x.category === cat)
+    .sort((a, b) => (a.date < b.date ? -1 : (a.date > b.date ? 1 : 0)))
+    .map(x => ({ date: x.date, amount: x.amount, porPagar: true,
+                 notes: (x.tipo === 'prestamo' ? 'Cuota ' : '') + x.name +
+                        (x.sinRegistrar ? ' · sin registrar · día' : (x.vencido ? ' · venció el' : ' · vence')) }));
+  return porPagar.concat(transactions
     .filter(t => t.type === 'expense' && t.category === cat && isSameMonth(t.date, month, year))
     .concat(gastosSinMovimiento(month, year).filter(g => g.category === cat))
-    .sort(porFechaDesc);
+    .sort(porFechaDesc));
 }
 
 // Mes a mes: los 6 meses hasta el seleccionado, gastado frente al tope.
@@ -4858,15 +5018,16 @@ function presupuestoHistorialHTML(monto) {
     const d = new Date(currentYear, currentMonth - k, 1);
     const m = d.getMonth(), y = d.getFullYear();
     const gastado = gastoTotalMes(m, y);
-    const pct = monto > 0 ? gastado / monto : 0;
-    const estado = estadoPresupuesto(gastado, monto);
-    const color = estado === 'excedido' ? 'red' : (estado === 'alerta' ? 'yellow' : 'green');
+    const reservado = totalPorPagar(m, y);
+    const total = gastado + reservado;
+    const pct = monto > 0 ? total / monto : 0;
+    const color = colorEstadoPresupuesto(estadoPresupuesto(total, monto));
     const sel = k === 0;
     filas.push(`
-      <div class="presup-hist${sel ? ' sel' : ''}" data-mes="${m}" data-anio="${y}" role="button" tabindex="0">
+      <div class="presup-hist${sel ? ' sel' : ''}" data-mes="${m}" data-anio="${y}" role="button" tabindex="0"${reservado > 0 ? ` title="Incluye ${fmt(reservado)} por pagar"` : ''}>
         <span class="ph-mes">${MONTHS_ES[m].slice(0, 3)} ${String(y).slice(2)}</span>
-        <div class="prog-bar"><div class="prog-fill ${color}" style="width:${Math.min(100, Math.round(pct * 100))}%"></div></div>
-        <strong>${fmt(gastado)}</strong>
+        ${barraPresupuestoHTML(gastado, reservado, monto, color)}
+        <strong>${fmt(total)}</strong>
         <span class="ph-pct">${Math.round(pct * 100)} %</span>
       </div>`);
   }
@@ -4886,19 +5047,23 @@ function activarHistorialPresupuesto(el) {
 // despliega para ver los gastos que la componen.
 function presupuestoDesgloseHTML(r, month, year, limite) {
   if (!r.categorias.length) return '<p class="muted" style="margin-top:.75rem">Aún no hay gastos este mes.</p>';
-  const base = r.monto > 0 ? r.monto : r.gastado;
+  const base = r.monto > 0 ? r.monto : r.total;
   const filas = (limite ? r.categorias.slice(0, limite) : r.categorias).map(c => {
-    const pctGasto = r.gastado > 0 ? Math.round(c.valor / r.gastado * 100) : 0;
+    const pctGasto = r.total > 0 ? Math.round(c.valor / r.total * 100) : 0;
+    const porPagar = c.porPagar > 0
+      ? `<div class="presup-porpagar">⏳ ${c.porPagar === c.valor ? 'Todo' : fmt(c.porPagar)} por pagar</div>` : '';
     const cabecera = `
         <div class="rule-labels" style="align-items:center;gap:.5rem;margin-bottom:.25rem">
           <span style="min-width:0">${esc(c.category)} · ${pctGasto} %</span>
           <strong style="white-space:nowrap">${fmt(c.valor)}</strong>
         </div>
-        <div class="prog-bar"><div class="prog-fill" style="width:${base > 0 ? Math.min(100, Math.round(c.valor / base * 100)) : 0}%;background:var(--accent)"></div></div>`;
+        ${barraPresupuestoHTML(c.valor - c.porPagar, c.porPagar, base, '', 'background-color:var(--accent)')}${porPagar}`;
     if (limite) return `<div class="rule-row">${cabecera}</div>`;
-    const items = gastosDeCategoria(c.category, month, year).map(t => `
-          <div class="presup-mov">
-            <span>${esc(fechaCorta(t.date))}${t.notes ? ' · ' + esc(t.notes) : ''}</span>
+    // Por pagar: "Arriendo · vence 05/11". Gastado: "05/11 · nota".
+    const items = gastosDeCategoria(c.category, month, year, r.pendientes).map(t => `
+          <div class="presup-mov${t.porPagar ? ' por-pagar' : ''}">
+            <span>${t.porPagar ? '⏳ ' + esc(t.notes) + ' ' + esc(fechaCorta(t.date))
+              : esc(fechaCorta(t.date)) + (t.notes ? ' · ' + esc(t.notes) : '')}</span>
             <strong>${fmt(t.amount)}</strong>
           </div>`).join('');
     return `<details class="rule-row presup-cat"><summary>${cabecera}</summary><div class="presup-movs">${items}</div></details>`;
@@ -4914,7 +5079,7 @@ function renderPresupuestos() {
   const r = resumenPresupuesto(currentMonth, currentYear);
   if (!r.monto) {
     el.innerHTML = `
-      <p class="muted" style="margin-bottom:.75rem">Define cuánto quieres gastar en total al mes. Kasa suma cada gasto, te avisa al llegar al 80 % y si te pasas, y te muestra en qué se te va la plata.</p>
+      <p class="muted" style="margin-bottom:.75rem">Define cuánto quieres gastar en total al mes. Kasa aparta desde el día 1 tus gastos fijos y cuotas del mes, suma cada gasto, te avisa al llegar al 80 % y si te pasas, y te muestra en qué se te va la plata.</p>
       <button class="btn-primary" id="presup-crear">＋ Definir presupuesto</button>
       ${presupuestoDesgloseHTML(r, currentMonth, currentYear)}`;
     document.getElementById('presup-crear').onclick = () => openPresupuestoForm();
@@ -4957,18 +5122,35 @@ function promedioGastoMensual() {
 function openPresupuestoForm() {
   const actual = presupuestoGeneral();
   const prom = promedioGastoMensual();
+  // Fijos y cuotas del mes en curso (pagados + por pagar): el piso del tope.
+  const hoy = new Date();
+  const fijosMes = fijosYCuotasDelMes(hoy.getMonth(), hoy.getFullYear());
   openModal((actual ? 'Editar' : 'Definir') + ' presupuesto', `
     <div class="form-group">
       <label class="form-label" for="pp-monto">¿Cuánto quieres gastar al mes? *</label>
       <input class="form-input" type="text" inputmode="numeric" data-money id="pp-monto"
              placeholder="$ 0" value="${actual ? fmtInput(actual) : ''}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
-        ${prom > 0 ? `En los últimos 3 meses gastaste en promedio ${fmt(prom)} al mes.` : 'Cuenta todos tus gastos: variables, gastos fijos pagados, cuotas y compras con tarjeta.'}
+        ${prom > 0 ? `En los últimos 3 meses gastaste en promedio ${fmt(prom)} al mes.` : 'Cuenta todos tus gastos: variables, gastos fijos, cuotas y compras con tarjeta.'}
+        ${fijosMes > 0 ? `<br>Este mes tus gastos fijos y cuotas suman ${fmt(fijosMes)}: el presupuesto los aparta desde el día 1.` : ''}
       </div>
+      ${fijosMes > 0 ? '<div id="pp-libre" style="font-size:.78rem;margin-top:.35rem"></div>' : ''}
     </div>
     <button class="btn-primary" id="pp-guardar">${actual ? 'Guardar cambios' : 'Guardar presupuesto'}</button>
   `);
   document.getElementById('pp-guardar').onclick = () => savePresupuestoForm();
+  const libre = document.getElementById('pp-libre');
+  if (libre) {
+    const pintar = () => {
+      const monto = moneyVal('pp-monto');
+      if (!(monto > 0)) { libre.innerHTML = ''; return; }
+      libre.innerHTML = monto >= fijosMes
+        ? `<span style="color:var(--text2)">Te quedan ${fmt(monto - fijosMes)} para lo demás.</span>`
+        : `<span style="color:var(--danger-text);font-weight:600">⚠ No alcanza para tus fijos y cuotas: faltan ${fmt(fijosMes - monto)}.</span>`;
+    };
+    document.getElementById('pp-monto').addEventListener('input', pintar);
+    pintar();
+  }
 }
 
 async function savePresupuestoForm() {
@@ -5003,13 +5185,23 @@ async function confirmDeletePresupuesto() {
 
 // Aviso en CADA gasto: cuánto queda del presupuesto del mes de ese
 // gasto, o cuánto te pasaste. Devuelve el mensaje o '' si no hay tope.
-function avisoPresupuesto(tx) {
+// Lo por pagar ya cuenta en "antes"; excluir = { fijoId | prestamoId }
+// saca de la reserva el fijo o la cuota que este gasto está pagando,
+// para que no se sume dos veces.
+function avisoPresupuesto(tx, excluir) {
   if (tx.type !== 'expense') return '';
   const monto = presupuestoGeneral();
   if (!(monto > 0)) return '';
   const d = parseLocalDate(tx.date);
-  const antes = gastoTotalMes(d.getMonth(), d.getFullYear(), tx.id);
-  const despues = antes + (Number(tx.amount) || 0);
+  const m = d.getMonth(), y = d.getFullYear();
+  // "antes" incluye lo ya apartado para este fijo o cuota; "despues"
+  // lo cambia por el pago real.
+  const sinReservaPropia = comprometidoMes(m, y, tx.id, excluir);
+  const reservaPropia = excluir ? totalPorPagar(m, y) - totalPorPagar(m, y, excluir) : 0;
+  const antes = sinReservaPropia + reservaPropia;
+  const despues = sinReservaPropia + (Number(tx.amount) || 0);
+  // Pagar lo que ya estaba apartado no mueve el presupuesto: sin aviso nuevo.
+  if (excluir && despues <= antes) return '✅ Ya estaba apartado en el presupuesto';
   if (despues > monto) {
     return antes <= monto
       ? `🔴 Te pasaste del presupuesto por ${fmt(despues - monto)}`
