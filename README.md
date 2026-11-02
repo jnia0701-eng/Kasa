@@ -272,4 +272,20 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
   te queda para lo demás, y avisa si el tope no alcanza.
 - Pagar un fijo o una cuota que ya estaba apartado no dispara avisos de presupuesto.
   Un abono mayor a la cuota sí avisa por la diferencia.
-- El formato de datos no cambia (IndexedDB v7, JSON 9).
+
+**📌 Fijos mensuales: cada pago cubre un mes**
+- Al registrar el pago eliges **qué mes pagas** (por defecto, el atrasado más antiguo
+  o el siguiente sin pagar). El próximo vencimiento es el mes siguiente al último pagado.
+- Antes se contaba desde la fecha del pago: pagar octubre el 3 de noviembre saltaba
+  noviembre, y pagar diciembre por adelantado no lo dejaba cubierto. Ya no pasa.
+- Si un mes atrasado no se debía (por ejemplo, pausaste el servicio), elige el mes que
+  pagas y los anteriores quedan cerrados.
+- Editar un pago permite corregir el mes que cubre. "Deshacer pago" quita el del
+  último mes pagado.
+- Los pagos registrados antes siguen valiendo sin migrar nada. Si alguno había
+  saltado un mes, ese mes vuelve a aparecer como pendiente: págalo, regístralo
+  "sin descontar" si ya lo pagaste por fuera, o elige un mes posterior para cerrarlo.
+- Los fijos de periodicidad mayor (SOAT, impuestos) siguen contando desde la fecha
+  del pago.
+- El formato de datos no cambia (IndexedDB v7, JSON 9; los pagos nuevos guardan el
+  campo `ciclo`).

@@ -1513,18 +1513,74 @@ function ultimoPagoFijo(f) {
   return mejor;
 }
 
+/* MES QUE CUBRE CADA PAGO (fijos mensuales)
+   El próximo vencimiento sale del último MES PAGADO, no de la fecha en
+   que se pagó: pagar octubre el 3 de noviembre deja noviembre pendiente,
+   y pagar diciembre el 30 de noviembre deja diciembre cubierto.
+   · Pagos nuevos: guardan el mes elegido en `ciclo` ('YYYY-MM-DD').
+   · Pagos anteriores (sin `ciclo`): el primero cubre el mes de su fecha,
+     como antes; los demás, el vencimiento que la app mostraba al
+     pagarlos (`vencia`). Así no hace falta migrar nada.
+   Los meses se manejan como índice año*12+mes para compararlos. */
+function mesIndice(d) { return d.getFullYear() * 12 + d.getMonth(); }
+
+// Fecha de vencimiento del fijo en el mes de índice idx (día de pago, ajustado a fin de mes).
+function fechaDeCiclo(f, idx) {
+  const y = Math.floor(idx / 12), m = idx - y * 12;
+  return new Date(y, m, Math.min(diaPagoDe(f), new Date(y, m + 1, 0).getDate()));
+}
+
+function cicloDePago(x, esPrimero) {
+  const desde = v => { const d = parseLocalDate(v); return isNaN(d.getTime()) ? NaN : mesIndice(d); };
+  if (x.ciclo) { const c = desde(x.ciclo); if (Number.isFinite(c)) return c; }
+  if (!esPrimero && x.vencia) { const c = desde(x.vencia); if (Number.isFinite(c)) return c; }
+  return desde(x.fecha);
+}
+
+// Mes que cubre cada pago: [{ pago, c }] (c = NaN si no se puede saber).
+function ciclosDePagos(f) {
+  const pagos = f.pagos || [];
+  let primero = null, tMin = Infinity;
+  for (let i = 0; i < pagos.length; i++) {
+    const t = parseLocalDate(pagos[i].fecha).getTime();
+    if (Number.isFinite(t) && t < tMin) { tMin = t; primero = pagos[i]; }
+  }
+  return pagos.map(x => ({ pago: x, c: cicloDePago(x, x === primero) }));
+}
+
+// El pago que cubre el último mes pagado (empate: el registrado después),
+// o null. excluir deja fuera un pago (el que se está editando).
+function pagoUltimoCiclo(f, excluir) {
+  let mejor = null;
+  ciclosDePagos(f).forEach(x => {
+    if (x.pago === excluir || !Number.isFinite(x.c)) return;
+    if (!mejor || x.c >= mejor.c) mejor = x;
+  });
+  return mejor;
+}
+
+// Último mes pagado (índice), o null si no hay pagos válidos.
+function ultimoCicloPagado(f, excluir) {
+  const x = pagoUltimoCiclo(f, excluir);
+  return x ? x.c : null;
+}
+
 /* Próxima fecha de vencimiento.
    Se deriva del historial ya guardado, por eso no hace falta migrar
    los pagos hechos con la versión anterior. */
 function proximoVencimiento(f) {
   const meses = mesesCiclo(f);
   const dia = diaPagoDe(f);
-  const ultimo = ultimoPagoFijo(f);
 
-  if (ultimo) {
-    const base = parseLocalDate(ultimo.fecha);
-    // Mensual: el día de pago del mes siguiente. Mayor: aniversario.
-    return meses <= 1 ? sumarMeses(base, 1, dia) : sumarMeses(base, meses);
+  if (meses <= 1) {
+    // Mensual: el día de pago del mes siguiente al último mes pagado.
+    const c = ultimoCicloPagado(f);
+    if (c !== null) return fechaDeCiclo(f, c + 1);
+  } else {
+    // Periodicidad mayor: aniversario de la fecha del último pago (un SOAT
+    // nuevo rige desde que se compra).
+    const ultimo = ultimoPagoFijo(f);
+    if (ultimo) return sumarMeses(parseLocalDate(ultimo.fecha), meses);
   }
 
   // Sin pagos no hay aniversario conocido: se muestra el proximo dia de
@@ -1560,7 +1616,16 @@ function fijoEstaPagado(f) { return estadoFijo(f) === 'pagado'; }
 // Se puede registrar un pago salvo que ya esté al día.
 function fijoSePuedePagar(f) { return estadoFijo(f) !== 'pagado'; }
 
-function pagoDeFijo(f) { return ultimoPagoFijo(f); }
+// El pago "vigente": el que se muestra, se edita y se deshace. En los
+// mensuales es el del último mes pagado, no el de fecha más reciente
+// (pagar octubre atrasado después de noviembre no lo vuelve el último).
+function pagoDeFijo(f) {
+  if (mesesCiclo(f) <= 1) {
+    const x = pagoUltimoCiclo(f);
+    if (x) return x.pago;
+  }
+  return ultimoPagoFijo(f);
+}
 
 // Fecha que se asigna al movimiento generado al pagar: hoy.
 function fechaPagoFijo(f) { return hoyLocal(); }
@@ -2768,20 +2833,36 @@ function openPagoFijoModal(id) {
          No tienes cuentas digitales. Créalas en 💳 Cuentas Digitales.
        </div>`;
 
+  const mensual = mesesCiclo(f) <= 1;
+  const ciclos = mensual ? opcionesCicloPago(f) : null;
   openModal('Registrar pago', `
     <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
       <div style="font-weight:600;font-size:.95rem">${esc(f.name)}</div>
       <div style="font-size:.8rem;color:var(--text2);margin-top:.15rem">
-        ${periodicidadDe(f).label} · vence ${fechaCorta(todayISO(proximoVencimiento(f)))}
+        ${mensual ? 'Mensual · día ' + diaPagoDe(f)
+          : periodicidadDe(f).label + ' · vence ' + fechaCorta(todayISO(proximoVencimiento(f)))}
       </div>
       <div style="font-family:var(--font-head);font-weight:800;font-size:1.5rem;margin-top:.4rem">${fmt(f.amount)}</div>
     </div>
+
+    ${mensual ? `
+    <div class="form-group">
+      <label class="form-label" for="pg-ciclo">Mes que pagas *</label>
+      <select class="form-input" id="pg-ciclo">
+        ${ciclos.opciones.map(o => `<option value="${o.idx}" ${o.idx === ciclos.elegido ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+      </select>
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+        ${ciclos.opciones.find(o => o.idx === ciclos.elegido).vencido
+          ? 'Es el mes atrasado más antiguo. Si un mes no se debía (por ejemplo, pausaste el servicio), elige el que pagas: los anteriores quedan cerrados.'
+          : 'El próximo vencimiento será el mes siguiente al que elijas.'}
+      </div>
+    </div>` : ''}
 
     <div class="form-group">
       <label class="form-label">Fecha del pago *</label>
       <input class="form-input" type="date" id="pg-fecha" value="${todayISO()}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
-        Si lo pagaste antes, corrige la fecha: define el próximo vencimiento.
+        ${mensual ? 'El día en que lo pagaste.' : 'Si lo pagaste antes, corrige la fecha: define el próximo vencimiento.'}
       </div>
     </div>
 
@@ -2828,12 +2909,35 @@ function openPagoFijoModal(id) {
   fechaEl.addEventListener('input', sincronizarDescuento);
   sincronizarDescuento();
 
+  const cicloEl = document.getElementById('pg-ciclo');
   document.querySelectorAll('#modal-content [data-metodo]').forEach(btn => {
     btn.onclick = () => registrarPagoFijo(
       id, btn.dataset.metodo, btn.dataset.cuenta || '',
-      fechaEl ? fechaEl.value : '', chkEl ? chkEl.checked : true
+      fechaEl ? fechaEl.value : '', chkEl ? chkEl.checked : true,
+      cicloEl ? parseInt(cicloEl.value, 10) : null
     );
   });
+}
+
+/* Meses que se pueden elegir al pagar un fijo mensual. Por defecto, el
+   primero sin pagar (el atrasado más antiguo si hay). Sin pagos previos,
+   el mes en curso, con dos meses atrás por si registras uno anterior.
+   Llega hasta el mes siguiente al actual, para pagar por adelantado. */
+function opcionesCicloPago(f, excluir, actual) {
+  const hoy = hoyLocal();
+  const c = ultimoCicloPagado(f, excluir);
+  const elegido = actual != null ? actual : (c !== null ? c + 1 : mesIndice(hoy));
+  const desde = Math.min(elegido, c !== null ? c + 1 : mesIndice(hoy) - 2);
+  const hasta = Math.min(Math.max(elegido, mesIndice(hoy)) + 1, desde + 24);
+  const opciones = [];
+  for (let i = desde; i <= hasta; i++) {
+    const venc = fechaDeCiclo(f, i);
+    const y = Math.floor(i / 12);
+    const vencido = venc < hoy;
+    opciones.push({ idx: i, vencido,
+      label: `${MONTHS_ES[i - y * 12]} ${y} · vence ${fechaCorta(todayISO(venc))}${vencido ? ' (atrasado)' : ''}` });
+  }
+  return { opciones, elegido };
 }
 
 /* Editar o eliminar un pago ya registrado. Sirve para corregir la fecha
@@ -2847,6 +2951,14 @@ function openEditarPagoModal(id) {
   const opciones = [{ metodo: 'efectivo', cuentaId: '', label: '💵 Efectivo' }]
     .concat(cuentas.map(c => ({ metodo: 'digital', cuentaId: c.id, label: '💳 ' + c.name })));
   const valorActual = pago.metodo === 'digital' ? 'digital:' + pago.cuentaId : 'efectivo:';
+  // Mensual: el mes que cubre este pago se puede corregir (también los
+  // registrados con versiones anteriores, que no lo guardaban).
+  const mensual = mesesCiclo(f) <= 1;
+  let ciclos = null;
+  if (mensual) {
+    const actual = (ciclosDePagos(f).find(x => x.pago === pago) || {}).c;
+    if (Number.isFinite(actual)) ciclos = opcionesCicloPago(f, pago, actual);
+  }
 
   openModal('Editar pago', `
     <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
@@ -2856,12 +2968,19 @@ function openEditarPagoModal(id) {
       </div>
     </div>
 
+    ${ciclos ? `
+    <div class="form-group">
+      <label class="form-label" for="ep-ciclo">Mes que pagaste *</label>
+      <select class="form-input" id="ep-ciclo">
+        ${ciclos.opciones.map(o => `<option value="${o.idx}" ${o.idx === ciclos.elegido ? 'selected' : ''}>${esc(o.label.replace(' (atrasado)', ''))}</option>`).join('')}
+      </select>
+    </div>` : ''}
     <div class="form-group">
       <label class="form-label">Fecha en que lo pagaste *</label>
       <input class="form-input" type="date" id="ep-fecha" value="${esc(pago.fecha)}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
         ${pago.txId
-          ? 'Solo recalcula el vencimiento. El movimiento sigue registrado el ' +
+          ? (ciclos ? '' : 'Solo recalcula el vencimiento. ') + 'El movimiento sigue registrado el ' +
             fechaCorta(pago.registradoEl || pago.fecha) + ' y el acumulado no cambia.'
           : 'Este pago se registró sin descontar del saldo, así que el acumulado no se ve afectado.'}
       </div>
@@ -2884,9 +3003,17 @@ function openEditarPagoModal(id) {
             onclick="confirmRevertirPago('${f.id}')">↩ Deshacer pago</button>
   `);
 
+  const cicloEl = document.getElementById('ep-ciclo');
   const previsualizar = () => {
     const fecha = document.getElementById('ep-fecha').value;
     const el = document.getElementById('ep-vence');
+    if (cicloEl) {
+      // El mes siguiente al último pagado, contando los demás pagos.
+      const otros = ultimoCicloPagado(f, pago);
+      const sel = parseInt(cicloEl.value, 10);
+      el.textContent = fechaCorta(todayISO(fechaDeCiclo(f, Math.max(sel, otros === null ? sel : otros) + 1)));
+      return;
+    }
     if (!fecha) { el.textContent = '—'; return; }
     const base = parseLocalDate(fecha);
     const meses = mesesCiclo(f);
@@ -2894,6 +3021,7 @@ function openEditarPagoModal(id) {
     el.textContent = fechaCorta(todayISO(venc));
   };
   document.getElementById('ep-fecha').addEventListener('input', previsualizar);
+  if (cicloEl) cicloEl.addEventListener('change', previsualizar);
   previsualizar();
 }
 
@@ -2906,6 +3034,9 @@ async function guardarEdicionPago(id) {
   const fecha = document.getElementById('ep-fecha').value;
   if (!fecha) { showToast('⚠ Ingresa la fecha del pago'); return; }
   const [metodo, cuentaId] = document.getElementById('ep-metodo').value.split(':');
+  const cicloEl = document.getElementById('ep-ciclo');
+  const cicloIdx = cicloEl ? parseInt(cicloEl.value, 10) : NaN;
+  const ciclo = Number.isFinite(cicloIdx) ? todayISO(fechaDeCiclo(f, cicloIdx)) : '';
 
   if (pago.txId) {
     const txViejo = transactions.find(t => t.id === pago.txId);
@@ -2933,7 +3064,8 @@ async function guardarEdicionPago(id) {
       }
     }
     const nuevos = (f.pagos || []).map(x => x === pago
-      ? Object.assign({}, x, { fecha, metodo, cuentaId: metodo === 'digital' ? (cuentaId || '') : '' })
+      ? Object.assign({}, x, { fecha, metodo, cuentaId: metodo === 'digital' ? (cuentaId || '') : '' },
+                      ciclo ? { ciclo, vencia: ciclo } : {})
       : x);
     await saveFijo(Object.assign({}, f, { pagos: nuevos }));
 
@@ -2957,17 +3089,19 @@ function tomarCandado() {
 function soltarCandado() { _guardando = false; }
 
 let _pagoEnCurso = false;
-async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) {
+async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar, cicloIdx) {
   if (_pagoEnCurso) return;               // evita duplicar el gasto con doble toque
   const f = fijos.find(x => x.id === id);
   if (!f) return;
   _pagoEnCurso = true;
 
-  // Fecha real del pago: solo sirve de ancla para calcular el vencimiento.
+  // Fecha real del pago. En los de periodicidad mayor es el ancla del
+  // próximo vencimiento; en los mensuales manda el mes elegido (ciclo).
   const fecha = fechaElegida || todayISO(fechaPagoFijo(f));
   // Fecha contable: siempre HOY, para no alterar meses ya cerrados.
   const fechaMovimiento = todayISO();
-  const vence = todayISO(proximoVencimiento(f));
+  const ciclo = (mesesCiclo(f) <= 1 && Number.isFinite(cicloIdx)) ? todayISO(fechaDeCiclo(f, cicloIdx)) : '';
+  const vence = ciclo || todayISO(proximoVencimiento(f));
 
   // Un pago de fecha pasada no genera movimiento: ese dinero ya salio de
   // la cuenta y descontarlo ahora lo restaria dos veces.
@@ -2995,7 +3129,8 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
     const actualizado = Object.assign({}, f, {
       pagos: (f.pagos || []).concat([{
         fecha, vencia: vence, metodo, cuentaId: cuentaId || '', monto: f.amount,
-        txId, registradoEl: fechaMovimiento, sinMovimiento: !generaMovimiento
+        txId, registradoEl: fechaMovimiento, sinMovimiento: !generaMovimiento,
+        ...(ciclo ? { ciclo } : {})
       }])
     });
     await saveFijo(actualizado);
@@ -6432,6 +6567,8 @@ async function importJSON(file) {
       periodicidad: PERIODICIDADES.some(p => p.id === f.periodicidad) ? f.periodicidad : 'mensual',
       pagos: Array.isArray(f.pagos) ? f.pagos.slice(0, 500).map(p => ({
         fecha: fechaOk(p && p.fecha), vencia: txt(p && p.vencia, 10),
+        // Mes que cubre el pago (fijos mensuales); vacío si no es una fecha.
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(String(p && p.ciclo || '')) ? { ciclo: p.ciclo } : {}),
         metodo: (p && p.metodo) === 'digital' ? 'digital' : 'efectivo',
         cuentaId: idsCuenta.has(idOk(p && p.cuentaId)) ? idOk(p && p.cuentaId) : '',
         txId: idOk(p && p.txId), registradoEl: txt(p && p.registradoEl, 10),
