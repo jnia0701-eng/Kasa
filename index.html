@@ -367,6 +367,17 @@ a{text-decoration:none;color:inherit}
 .presup-mov{display:flex;justify-content:space-between;gap:.5rem;font-size:.75rem;color:var(--text2);padding:.15rem 0}
 .presup-mov span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .presup-mov strong{color:var(--text);font-weight:600;white-space:nowrap}
+/* Presupuesto: tramo gastado (sólido) + tramo por pagar (rayado, más tenue). */
+.prog-bar.split{display:flex}
+.prog-bar.split .prog-fill{border-radius:0;flex-shrink:0}
+.prog-fill.reservado,.ley.reservado{opacity:.55;background-image:repeating-linear-gradient(-45deg,transparent 0 3px,rgba(255,255,255,.5) 3px 6px)}
+.presup-leyenda{display:flex;flex-wrap:wrap;gap:.2rem .9rem;font-size:.72rem;color:var(--text2);margin-top:.3rem}
+.presup-leyenda .ley{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.3rem;vertical-align:-1px}
+.ley.green{background-color:var(--ok)}
+.ley.yellow{background-color:var(--warn)}
+.ley.red{background-color:var(--danger)}
+.presup-porpagar{font-size:.72rem;color:var(--warn-text);margin-top:-.2rem}
+.presup-mov.por-pagar span{color:var(--warn-text)}
 .presup-hist{display:grid;grid-template-columns:3.4rem 1fr auto 2.8rem;align-items:center;gap:.5rem;font-size:.75rem;color:var(--text2);padding:.2rem .3rem;border-radius:6px;cursor:pointer}
 .presup-hist .prog-bar{margin:0}
 .presup-hist strong{color:var(--text);font-weight:600;white-space:nowrap}
@@ -1502,18 +1513,74 @@ function ultimoPagoFijo(f) {
   return mejor;
 }
 
+/* MES QUE CUBRE CADA PAGO (fijos mensuales)
+   El próximo vencimiento sale del último MES PAGADO, no de la fecha en
+   que se pagó: pagar octubre el 3 de noviembre deja noviembre pendiente,
+   y pagar diciembre el 30 de noviembre deja diciembre cubierto.
+   · Pagos nuevos: guardan el mes elegido en `ciclo` ('YYYY-MM-DD').
+   · Pagos anteriores (sin `ciclo`): el primero cubre el mes de su fecha,
+     como antes; los demás, el vencimiento que la app mostraba al
+     pagarlos (`vencia`). Así no hace falta migrar nada.
+   Los meses se manejan como índice año*12+mes para compararlos. */
+function mesIndice(d) { return d.getFullYear() * 12 + d.getMonth(); }
+
+// Fecha de vencimiento del fijo en el mes de índice idx (día de pago, ajustado a fin de mes).
+function fechaDeCiclo(f, idx) {
+  const y = Math.floor(idx / 12), m = idx - y * 12;
+  return new Date(y, m, Math.min(diaPagoDe(f), new Date(y, m + 1, 0).getDate()));
+}
+
+function cicloDePago(x, esPrimero) {
+  const desde = v => { const d = parseLocalDate(v); return isNaN(d.getTime()) ? NaN : mesIndice(d); };
+  if (x.ciclo) { const c = desde(x.ciclo); if (Number.isFinite(c)) return c; }
+  if (!esPrimero && x.vencia) { const c = desde(x.vencia); if (Number.isFinite(c)) return c; }
+  return desde(x.fecha);
+}
+
+// Mes que cubre cada pago: [{ pago, c }] (c = NaN si no se puede saber).
+function ciclosDePagos(f) {
+  const pagos = f.pagos || [];
+  let primero = null, tMin = Infinity;
+  for (let i = 0; i < pagos.length; i++) {
+    const t = parseLocalDate(pagos[i].fecha).getTime();
+    if (Number.isFinite(t) && t < tMin) { tMin = t; primero = pagos[i]; }
+  }
+  return pagos.map(x => ({ pago: x, c: cicloDePago(x, x === primero) }));
+}
+
+// El pago que cubre el último mes pagado (empate: el registrado después),
+// o null. excluir deja fuera un pago (el que se está editando).
+function pagoUltimoCiclo(f, excluir) {
+  let mejor = null;
+  ciclosDePagos(f).forEach(x => {
+    if (x.pago === excluir || !Number.isFinite(x.c)) return;
+    if (!mejor || x.c >= mejor.c) mejor = x;
+  });
+  return mejor;
+}
+
+// Último mes pagado (índice), o null si no hay pagos válidos.
+function ultimoCicloPagado(f, excluir) {
+  const x = pagoUltimoCiclo(f, excluir);
+  return x ? x.c : null;
+}
+
 /* Próxima fecha de vencimiento.
    Se deriva del historial ya guardado, por eso no hace falta migrar
    los pagos hechos con la versión anterior. */
 function proximoVencimiento(f) {
   const meses = mesesCiclo(f);
   const dia = diaPagoDe(f);
-  const ultimo = ultimoPagoFijo(f);
 
-  if (ultimo) {
-    const base = parseLocalDate(ultimo.fecha);
-    // Mensual: el día de pago del mes siguiente. Mayor: aniversario.
-    return meses <= 1 ? sumarMeses(base, 1, dia) : sumarMeses(base, meses);
+  if (meses <= 1) {
+    // Mensual: el día de pago del mes siguiente al último mes pagado.
+    const c = ultimoCicloPagado(f);
+    if (c !== null) return fechaDeCiclo(f, c + 1);
+  } else {
+    // Periodicidad mayor: aniversario de la fecha del último pago (un SOAT
+    // nuevo rige desde que se compra).
+    const ultimo = ultimoPagoFijo(f);
+    if (ultimo) return sumarMeses(parseLocalDate(ultimo.fecha), meses);
   }
 
   // Sin pagos no hay aniversario conocido: se muestra el proximo dia de
@@ -1549,7 +1616,16 @@ function fijoEstaPagado(f) { return estadoFijo(f) === 'pagado'; }
 // Se puede registrar un pago salvo que ya esté al día.
 function fijoSePuedePagar(f) { return estadoFijo(f) !== 'pagado'; }
 
-function pagoDeFijo(f) { return ultimoPagoFijo(f); }
+// El pago "vigente": el que se muestra, se edita y se deshace. En los
+// mensuales es el del último mes pagado, no el de fecha más reciente
+// (pagar octubre atrasado después de noviembre no lo vuelve el último).
+function pagoDeFijo(f) {
+  if (mesesCiclo(f) <= 1) {
+    const x = pagoUltimoCiclo(f);
+    if (x) return x.pago;
+  }
+  return ultimoPagoFijo(f);
+}
 
 // Fecha que se asigna al movimiento generado al pagar: hoy.
 function fechaPagoFijo(f) { return hoyLocal(); }
@@ -2757,20 +2833,36 @@ function openPagoFijoModal(id) {
          No tienes cuentas digitales. Créalas en 💳 Cuentas Digitales.
        </div>`;
 
+  const mensual = mesesCiclo(f) <= 1;
+  const ciclos = mensual ? opcionesCicloPago(f) : null;
   openModal('Registrar pago', `
     <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
       <div style="font-weight:600;font-size:.95rem">${esc(f.name)}</div>
       <div style="font-size:.8rem;color:var(--text2);margin-top:.15rem">
-        ${periodicidadDe(f).label} · vence ${fechaCorta(todayISO(proximoVencimiento(f)))}
+        ${mensual ? 'Mensual · día ' + diaPagoDe(f)
+          : periodicidadDe(f).label + ' · vence ' + fechaCorta(todayISO(proximoVencimiento(f)))}
       </div>
       <div style="font-family:var(--font-head);font-weight:800;font-size:1.5rem;margin-top:.4rem">${fmt(f.amount)}</div>
     </div>
+
+    ${mensual ? `
+    <div class="form-group">
+      <label class="form-label" for="pg-ciclo">Mes que pagas *</label>
+      <select class="form-input" id="pg-ciclo">
+        ${ciclos.opciones.map(o => `<option value="${o.idx}" ${o.idx === ciclos.elegido ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+      </select>
+      <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
+        ${ciclos.opciones.find(o => o.idx === ciclos.elegido).vencido
+          ? 'Es el mes atrasado más antiguo. Si un mes no se debía (por ejemplo, pausaste el servicio), elige el que pagas: los anteriores quedan cerrados.'
+          : 'El próximo vencimiento será el mes siguiente al que elijas.'}
+      </div>
+    </div>` : ''}
 
     <div class="form-group">
       <label class="form-label">Fecha del pago *</label>
       <input class="form-input" type="date" id="pg-fecha" value="${todayISO()}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
-        Si lo pagaste antes, corrige la fecha: define el próximo vencimiento.
+        ${mensual ? 'El día en que lo pagaste.' : 'Si lo pagaste antes, corrige la fecha: define el próximo vencimiento.'}
       </div>
     </div>
 
@@ -2817,12 +2909,35 @@ function openPagoFijoModal(id) {
   fechaEl.addEventListener('input', sincronizarDescuento);
   sincronizarDescuento();
 
+  const cicloEl = document.getElementById('pg-ciclo');
   document.querySelectorAll('#modal-content [data-metodo]').forEach(btn => {
     btn.onclick = () => registrarPagoFijo(
       id, btn.dataset.metodo, btn.dataset.cuenta || '',
-      fechaEl ? fechaEl.value : '', chkEl ? chkEl.checked : true
+      fechaEl ? fechaEl.value : '', chkEl ? chkEl.checked : true,
+      cicloEl ? parseInt(cicloEl.value, 10) : null
     );
   });
+}
+
+/* Meses que se pueden elegir al pagar un fijo mensual. Por defecto, el
+   primero sin pagar (el atrasado más antiguo si hay). Sin pagos previos,
+   el mes en curso, con dos meses atrás por si registras uno anterior.
+   Llega hasta el mes siguiente al actual, para pagar por adelantado. */
+function opcionesCicloPago(f, excluir, actual) {
+  const hoy = hoyLocal();
+  const c = ultimoCicloPagado(f, excluir);
+  const elegido = actual != null ? actual : (c !== null ? c + 1 : mesIndice(hoy));
+  const desde = Math.min(elegido, c !== null ? c + 1 : mesIndice(hoy) - 2);
+  const hasta = Math.min(Math.max(elegido, mesIndice(hoy)) + 1, desde + 24);
+  const opciones = [];
+  for (let i = desde; i <= hasta; i++) {
+    const venc = fechaDeCiclo(f, i);
+    const y = Math.floor(i / 12);
+    const vencido = venc < hoy;
+    opciones.push({ idx: i, vencido,
+      label: `${MONTHS_ES[i - y * 12]} ${y} · vence ${fechaCorta(todayISO(venc))}${vencido ? ' (atrasado)' : ''}` });
+  }
+  return { opciones, elegido };
 }
 
 /* Editar o eliminar un pago ya registrado. Sirve para corregir la fecha
@@ -2836,6 +2951,14 @@ function openEditarPagoModal(id) {
   const opciones = [{ metodo: 'efectivo', cuentaId: '', label: '💵 Efectivo' }]
     .concat(cuentas.map(c => ({ metodo: 'digital', cuentaId: c.id, label: '💳 ' + c.name })));
   const valorActual = pago.metodo === 'digital' ? 'digital:' + pago.cuentaId : 'efectivo:';
+  // Mensual: el mes que cubre este pago se puede corregir (también los
+  // registrados con versiones anteriores, que no lo guardaban).
+  const mensual = mesesCiclo(f) <= 1;
+  let ciclos = null;
+  if (mensual) {
+    const actual = (ciclosDePagos(f).find(x => x.pago === pago) || {}).c;
+    if (Number.isFinite(actual)) ciclos = opcionesCicloPago(f, pago, actual);
+  }
 
   openModal('Editar pago', `
     <div style="background:var(--bg2);border-radius:var(--r);padding:.85rem 1rem;margin-bottom:1.25rem">
@@ -2845,12 +2968,19 @@ function openEditarPagoModal(id) {
       </div>
     </div>
 
+    ${ciclos ? `
+    <div class="form-group">
+      <label class="form-label" for="ep-ciclo">Mes que pagaste *</label>
+      <select class="form-input" id="ep-ciclo">
+        ${ciclos.opciones.map(o => `<option value="${o.idx}" ${o.idx === ciclos.elegido ? 'selected' : ''}>${esc(o.label.replace(' (atrasado)', ''))}</option>`).join('')}
+      </select>
+    </div>` : ''}
     <div class="form-group">
       <label class="form-label">Fecha en que lo pagaste *</label>
       <input class="form-input" type="date" id="ep-fecha" value="${esc(pago.fecha)}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
         ${pago.txId
-          ? 'Solo recalcula el vencimiento. El movimiento sigue registrado el ' +
+          ? (ciclos ? '' : 'Solo recalcula el vencimiento. ') + 'El movimiento sigue registrado el ' +
             fechaCorta(pago.registradoEl || pago.fecha) + ' y el acumulado no cambia.'
           : 'Este pago se registró sin descontar del saldo, así que el acumulado no se ve afectado.'}
       </div>
@@ -2873,9 +3003,17 @@ function openEditarPagoModal(id) {
             onclick="confirmRevertirPago('${f.id}')">↩ Deshacer pago</button>
   `);
 
+  const cicloEl = document.getElementById('ep-ciclo');
   const previsualizar = () => {
     const fecha = document.getElementById('ep-fecha').value;
     const el = document.getElementById('ep-vence');
+    if (cicloEl) {
+      // El mes siguiente al último pagado, contando los demás pagos.
+      const otros = ultimoCicloPagado(f, pago);
+      const sel = parseInt(cicloEl.value, 10);
+      el.textContent = fechaCorta(todayISO(fechaDeCiclo(f, Math.max(sel, otros === null ? sel : otros) + 1)));
+      return;
+    }
     if (!fecha) { el.textContent = '—'; return; }
     const base = parseLocalDate(fecha);
     const meses = mesesCiclo(f);
@@ -2883,6 +3021,7 @@ function openEditarPagoModal(id) {
     el.textContent = fechaCorta(todayISO(venc));
   };
   document.getElementById('ep-fecha').addEventListener('input', previsualizar);
+  if (cicloEl) cicloEl.addEventListener('change', previsualizar);
   previsualizar();
 }
 
@@ -2895,6 +3034,9 @@ async function guardarEdicionPago(id) {
   const fecha = document.getElementById('ep-fecha').value;
   if (!fecha) { showToast('⚠ Ingresa la fecha del pago'); return; }
   const [metodo, cuentaId] = document.getElementById('ep-metodo').value.split(':');
+  const cicloEl = document.getElementById('ep-ciclo');
+  const cicloIdx = cicloEl ? parseInt(cicloEl.value, 10) : NaN;
+  const ciclo = Number.isFinite(cicloIdx) ? todayISO(fechaDeCiclo(f, cicloIdx)) : '';
 
   if (pago.txId) {
     const txViejo = transactions.find(t => t.id === pago.txId);
@@ -2922,7 +3064,8 @@ async function guardarEdicionPago(id) {
       }
     }
     const nuevos = (f.pagos || []).map(x => x === pago
-      ? Object.assign({}, x, { fecha, metodo, cuentaId: metodo === 'digital' ? (cuentaId || '') : '' })
+      ? Object.assign({}, x, { fecha, metodo, cuentaId: metodo === 'digital' ? (cuentaId || '') : '' },
+                      ciclo ? { ciclo, vencia: ciclo } : {})
       : x);
     await saveFijo(Object.assign({}, f, { pagos: nuevos }));
 
@@ -2946,17 +3089,19 @@ function tomarCandado() {
 function soltarCandado() { _guardando = false; }
 
 let _pagoEnCurso = false;
-async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) {
+async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar, cicloIdx) {
   if (_pagoEnCurso) return;               // evita duplicar el gasto con doble toque
   const f = fijos.find(x => x.id === id);
   if (!f) return;
   _pagoEnCurso = true;
 
-  // Fecha real del pago: solo sirve de ancla para calcular el vencimiento.
+  // Fecha real del pago. En los de periodicidad mayor es el ancla del
+  // próximo vencimiento; en los mensuales manda el mes elegido (ciclo).
   const fecha = fechaElegida || todayISO(fechaPagoFijo(f));
   // Fecha contable: siempre HOY, para no alterar meses ya cerrados.
   const fechaMovimiento = todayISO();
-  const vence = todayISO(proximoVencimiento(f));
+  const ciclo = (mesesCiclo(f) <= 1 && Number.isFinite(cicloIdx)) ? todayISO(fechaDeCiclo(f, cicloIdx)) : '';
+  const vence = ciclo || todayISO(proximoVencimiento(f));
 
   // Un pago de fecha pasada no genera movimiento: ese dinero ya salio de
   // la cuenta y descontarlo ahora lo restaria dos veces.
@@ -2976,7 +3121,7 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
         cuentaId: metodo === 'digital' ? cuentaId : '',
         notes: 'Pago gasto fijo: ' + f.name + (fecha !== fechaMovimiento ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
       };
-      avisoPresup = avisoPresupuesto(tx);
+      avisoPresup = avisoPresupuesto(tx, { fijoId: f.id });
       await saveTransaction(tx);
       txId = tx.id;
     }
@@ -2984,7 +3129,8 @@ async function registrarPagoFijo(id, metodo, cuentaId, fechaElegida, descontar) 
     const actualizado = Object.assign({}, f, {
       pagos: (f.pagos || []).concat([{
         fecha, vencia: vence, metodo, cuentaId: cuentaId || '', monto: f.amount,
-        txId, registradoEl: fechaMovimiento, sinMovimiento: !generaMovimiento
+        txId, registradoEl: fechaMovimiento, sinMovimiento: !generaMovimiento,
+        ...(ciclo ? { ciclo } : {})
       }])
     });
     await saveFijo(actualizado);
@@ -4360,7 +4506,7 @@ async function registrarPagoPrestamo(id) {
         category: 'Pago de préstamo', account: acc.account, cuentaId: acc.cuentaId,
         notes: 'Cuota préstamo: ' + p.name + ` (capital ${fmt(capital)} + interés ${fmt(interes)})` + (fecha !== todayISO() ? ' (pagado el ' + fechaCorta(fecha) + ')' : '')
       };
-      avisoPresup = avisoPresupuesto(tx);
+      avisoPresup = avisoPresupuesto(tx, { prestamoId: p.id });
       await saveTransaction(tx);
       txId = tx.id;
     }
@@ -4726,6 +4872,9 @@ function renderAvisoNegativos() {
    mes seleccionado (variables, gastos fijos pagados, cuotas de
    préstamo y compras con tarjeta de crédito), avisa al 80 % y al
    pasarse, y muestra en qué categorías se va la plata.
+   Los gastos fijos y cuotas que vencen en el mes y aún no se pagan
+   quedan RESERVADOS desde el día 1 (ver compromisosPendientes), así
+   "te quedan" es solo lo libre para lo demás.
    Se guarda como un único registro { id: 'general', category: 'General', monto }.
 ───────────────────────────────────────────────────────── */
 const PRESUP_AVISO = 0.8;
@@ -4777,6 +4926,108 @@ function gastosSinMovimiento(month, year) {
   return out;
 }
 
+/* Compromisos por pagar: gastos fijos y cuotas de préstamo que vencen en
+   el mes y todavía no se pagan. El presupuesto los reserva desde el día 1.
+   Al pagar uno, su próximo vencimiento pasa al ciclo siguiente y sale de
+   aquí, mientras el pago entra como gasto: el total no cambia y nada se
+   cuenta dos veces.
+   · Mes pasado: nada (se ve solo lo realmente gastado).
+   · Mes en curso: lo que vence este mes o ya está vencido (se sigue debiendo).
+   · Mes futuro: proyección de lo que vencería ese mes.
+   · Fijos de periodicidad mayor (SOAT, impuestos): completos en el mes en
+     que vencen. Sin ningún pago registrado no se sabe cuándo vencen, así
+     que no se reservan.
+   excluir = { fijoId, prestamoId }: el que se está pagando en este momento. */
+function compromisosPendientes(month, year, excluir) {
+  const hoy = hoyLocal();
+  const mesActual = hoy.getFullYear() * 12 + hoy.getMonth();
+  const mesPedido = year * 12 + month;
+  if (mesPedido < mesActual) return [];
+  const esActual = mesPedido === mesActual;
+  const inicio = new Date(year, month, 1);
+  const fin = new Date(year, month + 1, 0);
+  const ex = excluir || {};
+  const out = [];
+
+  fijos.forEach(f => {
+    if (f.id === ex.fijoId) return;
+    const monto = Number(f.amount) || 0;
+    if (!(monto > 0)) return;
+    const meses = mesesCiclo(f);
+    const ultimo = ultimoPagoFijo(f);
+    if (!ultimo && meses > 1) return;
+    const venc = proximoVencimiento(f);
+    let fecha = null;
+    if (esActual) {
+      if (venc <= fin) fecha = venc;
+      // Mensual sin ningún pago y con el día ya pasado: el de este mes
+      // sigue sin registrar, así que también se reserva.
+      else if (!ultimo) fecha = new Date(year, month, Math.min(diaPagoDe(f), fin.getDate()));
+    } else {
+      const dia = meses <= 1 ? diaPagoDe(f) : parseLocalDate(ultimo.fecha).getDate();
+      fecha = siguienteEnMes(venc, meses, dia, inicio, fin, Infinity);
+    }
+    if (!fecha) return;
+    out.push({ tipo: 'fijo', id: f.id, category: f.category, amount: monto, date: todayISO(fecha),
+               vencido: fecha < hoy && !!ultimo, sinRegistrar: !ultimo, name: f.name });
+  });
+
+  prestamos.forEach(p => {
+    if (p.id === ex.prestamoId) return;
+    const monto = prestamoCuotaSugerida(p);
+    if (!(monto > 0)) return;
+    const venc = prestamoProximoVenc(p);
+    let fecha = null;
+    if (esActual) {
+      if (venc <= fin) fecha = venc;
+    } else {
+      const total = parseInt(p.totalCuotas) || 0;
+      const restantes = total > 0 ? Math.max(1, total - prestamoNPagadas(p)) : Infinity;
+      fecha = siguienteEnMes(venc, 1, prestamoDia(p), inicio, fin, restantes);
+    }
+    if (!fecha) return;
+    out.push({ tipo: 'prestamo', id: p.id, category: 'Pago de préstamo', amount: monto, date: todayISO(fecha),
+               vencido: fecha < hoy, name: p.name });
+  });
+
+  return out;
+}
+
+// Primer vencimiento dentro de [inicio, fin] avanzando de a "meses" desde
+// venc (cuenta venc mismo). maxCiclos limita las cuotas que quedan.
+function siguienteEnMes(venc, meses, dia, inicio, fin, maxCiclos) {
+  let d = venc;
+  for (let k = 1; d < inicio; k++) {
+    if (k >= maxCiclos || k > 400) return null;
+    d = sumarMeses(venc, k * meses, dia);
+  }
+  return d <= fin ? d : null;
+}
+
+function totalPorPagar(month, year, excluir) {
+  return compromisosPendientes(month, year, excluir).reduce((s, x) => s + x.amount, 0);
+}
+
+// Gasto real + fijos y cuotas por pagar: lo que el presupuesto compara con el tope.
+function comprometidoMes(month, year, excluirId, excluir) {
+  return gastoTotalMes(month, year, excluirId) + totalPorPagar(month, year, excluir);
+}
+
+// Lo que suman los fijos y cuotas del mes: ya pagados + por pagar.
+// Un pago cuenta en el mes de su movimiento (o de su fecha si no generó uno).
+function fijosYCuotasDelMes(month, year) {
+  const fechaTx = new Map();
+  transactions.forEach(t => fechaTx.set(t.id, t.date));
+  let pagado = 0;
+  const sumar = x => {
+    const fecha = (x.txId && fechaTx.get(x.txId)) || x.fecha;
+    if (isSameMonth(fecha, month, year)) pagado += Number(x.monto) || 0;
+  };
+  fijos.forEach(f => (f.pagos || []).forEach(sumar));
+  prestamos.forEach(p => (p.pagos || []).forEach(sumar));
+  return pagado + totalPorPagar(month, year);
+}
+
 // Gasto por categoría en un mes, en una sola pasada. excluirId deja
 // fuera un movimiento (el que se está editando).
 function gastoPorCategoria(month, year, excluirId) {
@@ -4806,48 +5057,92 @@ function estadoPresupuesto(gastado, monto) {
 function resumenPresupuesto(month, year) {
   const monto = presupuestoGeneral();
   const cats = gastoPorCategoria(month, year);
+  const pendientes = compromisosPendientes(month, year);
   let gastado = 0;
-  cats.forEach(v => { gastado += v; });
+  const porCat = new Map();
+  cats.forEach((valor, category) => {
+    gastado += valor;
+    porCat.set(category, { category, valor, porPagar: 0 });
+  });
+  let reservado = 0;
+  pendientes.forEach(x => {
+    reservado += x.amount;
+    const c = porCat.get(x.category) || { category: x.category, valor: 0, porPagar: 0 };
+    c.valor += x.amount;
+    c.porPagar += x.amount;
+    porCat.set(x.category, c);
+  });
+  const total = gastado + reservado;
   return {
-    monto, gastado, pct: monto > 0 ? gastado / monto : 0, resto: monto - gastado,
-    estado: estadoPresupuesto(gastado, monto),
-    categorias: [...cats.entries()].map(([category, valor]) => ({ category, valor })).sort((a, b) => b.valor - a.valor)
+    monto, gastado, reservado, total, pendientes,
+    pct: monto > 0 ? total / monto : 0, resto: monto - total,
+    estado: estadoPresupuesto(total, monto),
+    categorias: [...porCat.values()].sort((a, b) => b.valor - a.valor)
   };
 }
 
-// Barra principal: gastado / tope, cuánto queda y cuánto se puede gastar por día.
+function colorEstadoPresupuesto(estado) {
+  return estado === 'excedido' ? 'red' : (estado === 'alerta' ? 'yellow' : 'green');
+}
+
+// Barra en dos tramos: lo gastado (sólido) y lo reservado por pagar
+// (rayado), ambos como % de la base.
+function barraPresupuestoHTML(gastado, reservado, base, cls, estilo) {
+  const pct = v => base > 0 ? Math.max(0, v / base * 100) : 0;
+  const a = Math.min(100, pct(gastado));
+  const b = Math.min(100 - a, pct(reservado));
+  return `<div class="prog-bar split"><div class="prog-fill ${cls}" style="width:${a.toFixed(1)}%;${estilo || ''}"></div>` +
+    (b > 0 ? `<div class="prog-fill ${cls} reservado" style="width:${b.toFixed(1)}%;${estilo || ''}"></div>` : '') + '</div>';
+}
+
+// Barra principal: gastado + por pagar / tope, cuánto queda y cuánto se puede gastar por día.
 function presupuestoBarraHTML(r, month, year) {
-  const color = r.estado === 'excedido' ? 'red' : (r.estado === 'alerta' ? 'yellow' : 'green');
+  const color = colorEstadoPresupuesto(r.estado);
+  const conReserva = r.reservado > 0;
   const detalle = r.resto >= 0
-    ? `Te quedan <strong style="color:var(--text)">${fmt(r.resto)}</strong>`
+    ? `Te quedan <strong style="color:var(--text)">${fmt(r.resto)}</strong>${conReserva ? ' para lo demás' : ''}`
     : `<span style="color:var(--danger-text);font-weight:600">Te pasaste ${fmt(-r.resto)}</span>`;
   const badge = r.estado === 'excedido' ? '<span class="badge overdue">Superado</span>'
     : (r.estado === 'alerta' ? '<span class="badge unpaid">80 %+</span>' : '');
+  const n = r.pendientes.length;
+  const leyenda = conReserva ? `
+      <div class="presup-leyenda">
+        <span><i class="ley ${color}"></i>Gastado ${fmt(r.gastado)}</span>
+        <span><i class="ley ${color} reservado"></i>Por pagar ${fmt(r.reservado)} · ${n} ${n === 1 ? 'fijo o cuota' : 'fijos y cuotas'}</span>
+      </div>` : '';
   // Ritmo diario solo para el mes en curso y si aún queda plata.
   let porDia = '';
   const hoy = new Date();
   if (r.resto > 0 && month === hoy.getMonth() && year === hoy.getFullYear()) {
     const diasRestantes = new Date(year, month + 1, 0).getDate() - hoy.getDate() + 1;
-    porDia = `<div style="font-size:.75rem;color:var(--text2);margin-top:.3rem">Puedes gastar unos ${fmt(Math.floor(r.resto / diasRestantes))} por día en los ${diasRestantes} días que faltan.</div>`;
+    porDia = `<div style="font-size:.75rem;color:var(--text2);margin-top:.3rem">Puedes gastar unos ${fmt(Math.floor(r.resto / diasRestantes))} por día en los ${diasRestantes} días que faltan${conReserva ? ', ya apartados tus fijos y cuotas' : ''}.</div>`;
   }
   return `
     <div class="rule-row">
       <div class="rule-labels" style="align-items:center;gap:.5rem">
-        <span style="display:flex;align-items:center;gap:.4rem">Gastado ${badge}</span>
-        <strong style="white-space:nowrap">${fmt(r.gastado)} / ${fmt(r.monto)}</strong>
+        <span style="display:flex;align-items:center;gap:.4rem">${conReserva ? 'Gastado + por pagar' : 'Gastado'} ${badge}</span>
+        <strong style="white-space:nowrap">${fmt(r.total)} / ${fmt(r.monto)}</strong>
       </div>
-      <div class="prog-bar"><div class="prog-fill ${color}" style="width:${Math.min(100, Math.round(r.pct * 100))}%"></div></div>
-      <div style="font-size:.75rem;color:var(--text2)">${Math.round(r.pct * 100)} % usado · ${detalle}</div>
+      ${barraPresupuestoHTML(r.gastado, r.reservado, r.monto, color)}
+      <div style="font-size:.75rem;color:var(--text2)">${Math.round(r.pct * 100)} % ${conReserva ? 'comprometido' : 'usado'} · ${detalle}</div>
+      ${leyenda}
       ${porDia}
     </div>`;
 }
 
-// Movimientos de una categoría en el mes, el más reciente primero.
-function gastosDeCategoria(cat, month, year) {
-  return transactions
+// Movimientos de una categoría en el mes: primero lo que falta por pagar
+// (más próximo primero) y luego lo gastado, el más reciente primero.
+function gastosDeCategoria(cat, month, year, pendientes) {
+  const porPagar = (pendientes || [])
+    .filter(x => x.category === cat)
+    .sort((a, b) => (a.date < b.date ? -1 : (a.date > b.date ? 1 : 0)))
+    .map(x => ({ date: x.date, amount: x.amount, porPagar: true,
+                 notes: (x.tipo === 'prestamo' ? 'Cuota ' : '') + x.name +
+                        (x.sinRegistrar ? ' · sin registrar · día' : (x.vencido ? ' · venció el' : ' · vence')) }));
+  return porPagar.concat(transactions
     .filter(t => t.type === 'expense' && t.category === cat && isSameMonth(t.date, month, year))
     .concat(gastosSinMovimiento(month, year).filter(g => g.category === cat))
-    .sort(porFechaDesc);
+    .sort(porFechaDesc));
 }
 
 // Mes a mes: los 6 meses hasta el seleccionado, gastado frente al tope.
@@ -4858,15 +5153,16 @@ function presupuestoHistorialHTML(monto) {
     const d = new Date(currentYear, currentMonth - k, 1);
     const m = d.getMonth(), y = d.getFullYear();
     const gastado = gastoTotalMes(m, y);
-    const pct = monto > 0 ? gastado / monto : 0;
-    const estado = estadoPresupuesto(gastado, monto);
-    const color = estado === 'excedido' ? 'red' : (estado === 'alerta' ? 'yellow' : 'green');
+    const reservado = totalPorPagar(m, y);
+    const total = gastado + reservado;
+    const pct = monto > 0 ? total / monto : 0;
+    const color = colorEstadoPresupuesto(estadoPresupuesto(total, monto));
     const sel = k === 0;
     filas.push(`
-      <div class="presup-hist${sel ? ' sel' : ''}" data-mes="${m}" data-anio="${y}" role="button" tabindex="0">
+      <div class="presup-hist${sel ? ' sel' : ''}" data-mes="${m}" data-anio="${y}" role="button" tabindex="0"${reservado > 0 ? ` title="Incluye ${fmt(reservado)} por pagar"` : ''}>
         <span class="ph-mes">${MONTHS_ES[m].slice(0, 3)} ${String(y).slice(2)}</span>
-        <div class="prog-bar"><div class="prog-fill ${color}" style="width:${Math.min(100, Math.round(pct * 100))}%"></div></div>
-        <strong>${fmt(gastado)}</strong>
+        ${barraPresupuestoHTML(gastado, reservado, monto, color)}
+        <strong>${fmt(total)}</strong>
         <span class="ph-pct">${Math.round(pct * 100)} %</span>
       </div>`);
   }
@@ -4886,19 +5182,23 @@ function activarHistorialPresupuesto(el) {
 // despliega para ver los gastos que la componen.
 function presupuestoDesgloseHTML(r, month, year, limite) {
   if (!r.categorias.length) return '<p class="muted" style="margin-top:.75rem">Aún no hay gastos este mes.</p>';
-  const base = r.monto > 0 ? r.monto : r.gastado;
+  const base = r.monto > 0 ? r.monto : r.total;
   const filas = (limite ? r.categorias.slice(0, limite) : r.categorias).map(c => {
-    const pctGasto = r.gastado > 0 ? Math.round(c.valor / r.gastado * 100) : 0;
+    const pctGasto = r.total > 0 ? Math.round(c.valor / r.total * 100) : 0;
+    const porPagar = c.porPagar > 0
+      ? `<div class="presup-porpagar">⏳ ${c.porPagar === c.valor ? 'Todo' : fmt(c.porPagar)} por pagar</div>` : '';
     const cabecera = `
         <div class="rule-labels" style="align-items:center;gap:.5rem;margin-bottom:.25rem">
           <span style="min-width:0">${esc(c.category)} · ${pctGasto} %</span>
           <strong style="white-space:nowrap">${fmt(c.valor)}</strong>
         </div>
-        <div class="prog-bar"><div class="prog-fill" style="width:${base > 0 ? Math.min(100, Math.round(c.valor / base * 100)) : 0}%;background:var(--accent)"></div></div>`;
+        ${barraPresupuestoHTML(c.valor - c.porPagar, c.porPagar, base, '', 'background-color:var(--accent)')}${porPagar}`;
     if (limite) return `<div class="rule-row">${cabecera}</div>`;
-    const items = gastosDeCategoria(c.category, month, year).map(t => `
-          <div class="presup-mov">
-            <span>${esc(fechaCorta(t.date))}${t.notes ? ' · ' + esc(t.notes) : ''}</span>
+    // Por pagar: "Arriendo · vence 05/11". Gastado: "05/11 · nota".
+    const items = gastosDeCategoria(c.category, month, year, r.pendientes).map(t => `
+          <div class="presup-mov${t.porPagar ? ' por-pagar' : ''}">
+            <span>${t.porPagar ? '⏳ ' + esc(t.notes) + ' ' + esc(fechaCorta(t.date))
+              : esc(fechaCorta(t.date)) + (t.notes ? ' · ' + esc(t.notes) : '')}</span>
             <strong>${fmt(t.amount)}</strong>
           </div>`).join('');
     return `<details class="rule-row presup-cat"><summary>${cabecera}</summary><div class="presup-movs">${items}</div></details>`;
@@ -4914,7 +5214,7 @@ function renderPresupuestos() {
   const r = resumenPresupuesto(currentMonth, currentYear);
   if (!r.monto) {
     el.innerHTML = `
-      <p class="muted" style="margin-bottom:.75rem">Define cuánto quieres gastar en total al mes. Kasa suma cada gasto, te avisa al llegar al 80 % y si te pasas, y te muestra en qué se te va la plata.</p>
+      <p class="muted" style="margin-bottom:.75rem">Define cuánto quieres gastar en total al mes. Kasa aparta desde el día 1 tus gastos fijos y cuotas del mes, suma cada gasto, te avisa al llegar al 80 % y si te pasas, y te muestra en qué se te va la plata.</p>
       <button class="btn-primary" id="presup-crear">＋ Definir presupuesto</button>
       ${presupuestoDesgloseHTML(r, currentMonth, currentYear)}`;
     document.getElementById('presup-crear').onclick = () => openPresupuestoForm();
@@ -4957,18 +5257,35 @@ function promedioGastoMensual() {
 function openPresupuestoForm() {
   const actual = presupuestoGeneral();
   const prom = promedioGastoMensual();
+  // Fijos y cuotas del mes en curso (pagados + por pagar): el piso del tope.
+  const hoy = new Date();
+  const fijosMes = fijosYCuotasDelMes(hoy.getMonth(), hoy.getFullYear());
   openModal((actual ? 'Editar' : 'Definir') + ' presupuesto', `
     <div class="form-group">
       <label class="form-label" for="pp-monto">¿Cuánto quieres gastar al mes? *</label>
       <input class="form-input" type="text" inputmode="numeric" data-money id="pp-monto"
              placeholder="$ 0" value="${actual ? fmtInput(actual) : ''}">
       <div style="font-size:.75rem;color:var(--text2);margin-top:.35rem">
-        ${prom > 0 ? `En los últimos 3 meses gastaste en promedio ${fmt(prom)} al mes.` : 'Cuenta todos tus gastos: variables, gastos fijos pagados, cuotas y compras con tarjeta.'}
+        ${prom > 0 ? `En los últimos 3 meses gastaste en promedio ${fmt(prom)} al mes.` : 'Cuenta todos tus gastos: variables, gastos fijos, cuotas y compras con tarjeta.'}
+        ${fijosMes > 0 ? `<br>Este mes tus gastos fijos y cuotas suman ${fmt(fijosMes)}: el presupuesto los aparta desde el día 1.` : ''}
       </div>
+      ${fijosMes > 0 ? '<div id="pp-libre" style="font-size:.78rem;margin-top:.35rem"></div>' : ''}
     </div>
     <button class="btn-primary" id="pp-guardar">${actual ? 'Guardar cambios' : 'Guardar presupuesto'}</button>
   `);
   document.getElementById('pp-guardar').onclick = () => savePresupuestoForm();
+  const libre = document.getElementById('pp-libre');
+  if (libre) {
+    const pintar = () => {
+      const monto = moneyVal('pp-monto');
+      if (!(monto > 0)) { libre.innerHTML = ''; return; }
+      libre.innerHTML = monto >= fijosMes
+        ? `<span style="color:var(--text2)">Te quedan ${fmt(monto - fijosMes)} para lo demás.</span>`
+        : `<span style="color:var(--danger-text);font-weight:600">⚠ No alcanza para tus fijos y cuotas: faltan ${fmt(fijosMes - monto)}.</span>`;
+    };
+    document.getElementById('pp-monto').addEventListener('input', pintar);
+    pintar();
+  }
 }
 
 async function savePresupuestoForm() {
@@ -5003,13 +5320,23 @@ async function confirmDeletePresupuesto() {
 
 // Aviso en CADA gasto: cuánto queda del presupuesto del mes de ese
 // gasto, o cuánto te pasaste. Devuelve el mensaje o '' si no hay tope.
-function avisoPresupuesto(tx) {
+// Lo por pagar ya cuenta en "antes"; excluir = { fijoId | prestamoId }
+// saca de la reserva el fijo o la cuota que este gasto está pagando,
+// para que no se sume dos veces.
+function avisoPresupuesto(tx, excluir) {
   if (tx.type !== 'expense') return '';
   const monto = presupuestoGeneral();
   if (!(monto > 0)) return '';
   const d = parseLocalDate(tx.date);
-  const antes = gastoTotalMes(d.getMonth(), d.getFullYear(), tx.id);
-  const despues = antes + (Number(tx.amount) || 0);
+  const m = d.getMonth(), y = d.getFullYear();
+  // "antes" incluye lo ya apartado para este fijo o cuota; "despues"
+  // lo cambia por el pago real.
+  const sinReservaPropia = comprometidoMes(m, y, tx.id, excluir);
+  const reservaPropia = excluir ? totalPorPagar(m, y) - totalPorPagar(m, y, excluir) : 0;
+  const antes = sinReservaPropia + reservaPropia;
+  const despues = sinReservaPropia + (Number(tx.amount) || 0);
+  // Pagar lo que ya estaba apartado no mueve el presupuesto: sin aviso nuevo.
+  if (excluir && despues <= antes) return '✅ Ya estaba apartado en el presupuesto';
   if (despues > monto) {
     return antes <= monto
       ? `🔴 Te pasaste del presupuesto por ${fmt(despues - monto)}`
@@ -6240,6 +6567,8 @@ async function importJSON(file) {
       periodicidad: PERIODICIDADES.some(p => p.id === f.periodicidad) ? f.periodicidad : 'mensual',
       pagos: Array.isArray(f.pagos) ? f.pagos.slice(0, 500).map(p => ({
         fecha: fechaOk(p && p.fecha), vencia: txt(p && p.vencia, 10),
+        // Mes que cubre el pago (fijos mensuales); vacío si no es una fecha.
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(String(p && p.ciclo || '')) ? { ciclo: p.ciclo } : {}),
         metodo: (p && p.metodo) === 'digital' ? 'digital' : 'efectivo',
         cuentaId: idsCuenta.has(idOk(p && p.cuentaId)) ? idOk(p && p.cuentaId) : '',
         txId: idOk(p && p.txId), registradoEl: txt(p && p.registradoEl, 10),

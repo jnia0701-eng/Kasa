@@ -252,3 +252,40 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 - El movimiento de un pago de fijo o cuota se deshace desde su sección, no desde
   Movimientos, para que el pago no quede marcado sin plata.
 - Importar un respaldo sanea los identificadores (seguridad).
+
+---
+
+## v7 · Fijos y cuotas apartados en el presupuesto
+
+**🎯 El presupuesto ya cuenta lo que tienes que pagar**
+- Desde el día 1, los gastos fijos y las cuotas de préstamos que vencen en el mes quedan
+  **apartados** en el presupuesto. "Te quedan" muestra solo lo libre para lo demás.
+- La barra tiene dos tramos: lo **gastado** (sólido) y lo **por pagar** (rayado).
+  Al pagar un fijo o una cuota, el monto pasa de un tramo al otro: lo que te queda
+  no cambia y nada se cuenta dos veces.
+- Lo vencido sigue apartado hasta que lo pagues. Los fijos de periodicidad mayor
+  (SOAT, impuestos) se apartan completos en el mes en que vencen; si aún no tienen
+  ningún pago registrado, no se sabe cuándo vencen y no se apartan.
+- Meses pasados: solo lo realmente gastado. Meses futuros: proyección de lo que vence.
+- "¿En qué se te va?" marca lo que falta por pagar en cada categoría y lo lista primero.
+- Al definir el tope, Kasa muestra cuánto suman tus fijos y cuotas del mes y cuánto
+  te queda para lo demás, y avisa si el tope no alcanza.
+- Pagar un fijo o una cuota que ya estaba apartado no dispara avisos de presupuesto.
+  Un abono mayor a la cuota sí avisa por la diferencia.
+
+**📌 Fijos mensuales: cada pago cubre un mes**
+- Al registrar el pago eliges **qué mes pagas** (por defecto, el atrasado más antiguo
+  o el siguiente sin pagar). El próximo vencimiento es el mes siguiente al último pagado.
+- Antes se contaba desde la fecha del pago: pagar octubre el 3 de noviembre saltaba
+  noviembre, y pagar diciembre por adelantado no lo dejaba cubierto. Ya no pasa.
+- Si un mes atrasado no se debía (por ejemplo, pausaste el servicio), elige el mes que
+  pagas y los anteriores quedan cerrados.
+- Editar un pago permite corregir el mes que cubre. "Deshacer pago" quita el del
+  último mes pagado.
+- Los pagos registrados antes siguen valiendo sin migrar nada. Si alguno había
+  saltado un mes, ese mes vuelve a aparecer como pendiente: págalo, regístralo
+  "sin descontar" si ya lo pagaste por fuera, o elige un mes posterior para cerrarlo.
+- Los fijos de periodicidad mayor (SOAT, impuestos) siguen contando desde la fecha
+  del pago.
+- El formato de datos no cambia (IndexedDB v7, JSON 9; los pagos nuevos guardan el
+  campo `ciclo`).
