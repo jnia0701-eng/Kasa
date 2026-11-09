@@ -403,6 +403,29 @@ a{text-decoration:none;color:inherit}
 .tc-linea{display:flex;gap:.4rem;font-size:.76rem;color:var(--text2);line-height:1.35}
 .tc-linea strong{color:var(--text)}
 .tc-linea.vencido,.tc-linea.vencido strong{color:var(--danger-text)}
+/* Pagar tarjeta: botón visible en la tarjeta + historial de pagos */
+.tc-pagar{margin-top:.6rem;width:100%;max-width:300px;padding:.6rem .8rem;border-radius:10px;border:none;
+  background:var(--text);color:var(--bg);font-weight:600;font-size:.85rem;cursor:pointer;text-align:center}
+.tc-pagar.urgente{background:var(--danger);color:#fff}
+.tc-pagar:disabled{background:var(--bg2);color:var(--text3);cursor:default}
+.tc-pagos{margin-top:.55rem;max-width:300px}
+.tc-pagos-tit{font-size:.7rem;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.2rem}
+.tc-pago{display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--text2);padding:.15rem 0}
+.tc-pago span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-pago strong{color:var(--ok);white-space:nowrap}
+.tc-pago-del{border:none;background:none;color:var(--text3);cursor:pointer;font-size:.8rem;padding:.1rem .3rem}
+/* Modal Pagar tarjeta */
+.pt-resumen{background:var(--bg2);border-radius:var(--r);padding:.75rem .9rem;margin-bottom:1rem;display:flex;flex-direction:column;gap:.3rem}
+.pt-res-fila{display:flex;justify-content:space-between;gap:.5rem;font-size:.85rem}
+.pt-res-fila span:first-child{color:var(--text2)}
+.pt-res-fila.vencido strong{color:var(--danger-text)}
+.pt-res-nota{font-size:.75rem;color:var(--text2);line-height:1.4}
+.pt-res-nota.vencido{color:var(--danger-text);font-weight:600}
+.pt-chips{display:flex;gap:.4rem;flex-wrap:wrap;margin:.35rem 0 .5rem}
+.pt-chip{flex:1 1 30%;text-align:center;line-height:1.3;padding:.45rem .5rem;font-size:.75rem;white-space:normal;border-radius:12px}
+.pt-chip strong{font-size:.85rem}
+.pt-extra{margin-bottom:1rem;font-size:.84rem}
+.pt-extra summary{cursor:pointer;color:var(--accent-text);font-weight:500}
 .tc-linea.oro{background:color-mix(in srgb,var(--warn) 12%,transparent);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);border-radius:8px;padding:.35rem .5rem;color:var(--text)}
 .tc-linea.oro.activo{background:color-mix(in srgb,var(--warn) 22%,transparent);border-color:color-mix(in srgb,var(--warn) 55%,transparent);font-weight:500}
 .dash-oro{background:color-mix(in srgb,var(--warn) 14%,var(--card));border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
@@ -1408,7 +1431,7 @@ let presupuestos = []; // Tope mensual de gasto por categoría { id, category, m
 let metas = [];        // Metas de ahorro { id, name, objetivo, fecha }; los aportes son ahorros con metaId
 
 const INCOME_CATS = ['Salario', 'Freelance', 'Ventas', 'Inversiones', 'Regalos', 'Otros ingresos'];
-const EXPENSE_CATS = ['Comida', 'Transporte', 'Salud', 'Entretenimiento', 'Ropa', 'Café/Snacks', 'Tecnología', 'Educación', 'Belleza', 'Hogar', 'Otros gastos'];
+const EXPENSE_CATS = ['Comida', 'Transporte', 'Salud', 'Entretenimiento', 'Ropa', 'Café/Snacks', 'Tecnología', 'Educación', 'Belleza', 'Hogar', 'Intereses y comisiones', 'Otros gastos'];
 const SAVING_CATS = ['Ahorro general', 'Fondo de emergencia', 'Meta de viaje', 'Inversión', 'Retiro', 'Otro ahorro'];
 const FIJO_CATS = ['Arriendo/Hipoteca', 'Internet', 'Luz/Agua/Gas', 'Teléfono', 'Streaming', 'Gimnasio', 'Seguro', 'Crédito', 'Otros fijos'];
 const ACTIVO_CATS = ['Cuenta bancaria', 'Efectivo', 'Inversiones', 'Bienes raíces', 'Vehículo', 'Fondo de retiro', 'Cuentas por cobrar', 'Otro activo'];
@@ -2078,7 +2101,7 @@ function facturadoEnCorte(c, x, hasta) {
     const n = txCuotas(t);
     for (let k = 0; k < n; k++) {
       const xc = k === 0 ? primer : corteMas(c, primer, k);
-      if (hasta ? xc <= x : mismaFecha(xc, x)) total += n > 1 ? Math.round(monto / n) : monto;
+      if (hasta ? xc <= x : mismaFecha(xc, x)) total += montoCuota(monto, n, k);
     }
   });
   return total;
@@ -2102,13 +2125,26 @@ function creditoPagoExigible(id) {
   const ci = cicloTarjeta(c);
   const deuda = Math.max(0, cuentaDeuda(id));
   const exigible = Math.min(deuda, Math.max(0, facturadoEnCorte(c, ci.x0, true) - pagosTarjeta(id)));
-  return Object.assign(ci, { exigible, alCorte: facturadoEnCorte(c, ci.x1, false), deuda });
+  // Del corte en curso, lo que sigue sin pagar (los abonos anticipados lo bajan).
+  const alCorte = facturadoEnCorte(c, ci.x1, false);
+  const alCortePend = Math.max(0, Math.min(deuda - exigible, alCorte,
+    facturadoEnCorte(c, ci.x1, true) - pagosTarjeta(id) - exigible));
+  return Object.assign(ci, { exigible, alCorte, alCortePend, deuda });
 }
 
 // Compatibilidad: lo que va del corte en curso.
 function creditoGastosDelCorte(id) {
   const c = cuentas.find(x => x.id === id);
   return c ? facturadoEnCorte(c, cicloTarjeta(c).x1, false) : 0;
+}
+/* Valor de la cuota k (0..n−1). La última absorbe el residuo del
+   redondeo: antes cada cuota era round(monto/n) y la suma podía quedar
+   unos pesos por encima o por debajo de la compra, así que el extracto
+   no cuadraba con la deuda y quedaba un saldo "fantasma". */
+function montoCuota(monto, n, k) {
+  if (n <= 1) return monto;
+  const base = Math.round(monto / n);
+  return k < n - 1 ? base : monto - base * (n - 1);
 }
 // Nº de cuotas por compra (1 = contado). Solo aplica a crédito.
 function txCuotas(t) {
@@ -2125,9 +2161,9 @@ function creditoCuotasPendientes(id) {
   comprasTarjeta(id).filter(t => txCuotas(t) > 1).forEach(t => {
     const tot = txCuotas(t);
     const primer = corteDeFecha(c, parseLocalDate(t.date));
-    let rest = 0;
-    for (let k = 0; k < tot; k++) if (corteMas(c, primer, k) > x0) rest++;
-    if (rest > 0) { n += rest; compras++; monto += Math.round(Number(t.amount) * rest / tot); }
+    let rest = 0, restMonto = 0;
+    for (let k = 0; k < tot; k++) if (corteMas(c, primer, k) > x0) { rest++; restMonto += montoCuota(Number(t.amount) || 0, tot, k); }
+    if (rest > 0) { n += rest; compras++; monto += restMonto; }
   });
   return { n, monto, compras };
 }
@@ -3225,31 +3261,231 @@ async function confirmTipoCuenta(id, tipo) {
   }
 }
 
-// Pagar tarjeta = traslado hacia la deuda (baja caja y deuda, el total
-// no cambia y no cuenta como gasto: el gasto fue la compra).
-// Pagar la tarjeta = traslado desde efectivo o una cuenta débito hacia la
-// tarjeta: baja la deuda y libera cupo, sin contar como gasto (el gasto ya
-// se registró en cada compra). Origen sugerido: el bolsillo con más saldo.
-function pagarTarjeta(id) {
-  const deuda = cuentaDeuda(id);
-  if (deuda <= 0) { showToast('✓ Sin deuda por pagar en esta tarjeta'); return; }
-  const origenes = ['efectivo'].concat(cuentas.filter(c => cuentaTipo(c.id) !== 'credito').map(c => 'cuenta:' + c.id));
-  const origen = origenes.reduce((mejor, ep) =>
-    (Number(endpointBookBalance(ep)) || 0) > (Number(endpointBookBalance(mejor)) || 0) ? ep : mejor, 'efectivo');
-  // Se sugiere el pago del extracto ya cerrado (lo que el banco cobra en
-  // esta fecha); si no hay, la deuda total como abono anticipado.
-  const ci = creditoPagoExigible(id);
+/* ── PAGAR TARJETA DE CRÉDITO ─────────────────────────────
+   El pago es un traslado desde efectivo o una cuenta débito hacia la
+   tarjeta: baja la plata del origen y baja la deuda en lo mismo. NO es
+   gasto (el gasto fue cada compra) y por eso el Total Disponible no
+   cambia: la compra ya lo había descontado.
+   Modal propio (antes se reusaba el de traslados, que dejaba cambiar el
+   destino, pagar de más sin aviso y no explicaba por qué el total no
+   bajaba). Permite anotar intereses / cuota de manejo del extracto: se
+   registran como gasto en la tarjeta para que la deuda cuadre con el
+   banco antes de pagar. */
+let _ptCard = '';
+let _ptOrigen = '';
+
+function tarjetasCredito() {
+  return cuentas.filter(c => cuentaTipo(c.id) === 'credito');
+}
+function origenesPagoTarjeta() {
+  return endpointsDinero();
+}
+function saldoOrigen(ep) { return Number(endpointBookBalance(ep)) || 0; }
+
+// Pagos hechos a una tarjeta (traslados hacia ella), del más reciente.
+function pagosDeTarjeta(id) {
+  const ep = 'cuenta:' + id;
+  return traslados.filter(t => t.to === ep)
+    .sort((a, b) => parseLocalDate(b.date) - parseLocalDate(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+function pagarTarjeta(id, montoPreset) {
+  const tarjetas = tarjetasCredito();
+  if (!tarjetas.length) {
+    showToast('💳 No tienes tarjetas de crédito. Crea una cuenta y elige modalidad Crédito.');
+    return;
+  }
+  // Sin tarjeta indicada: la que más debe.
+  _ptCard = id && tarjetas.some(c => c.id === id) ? id
+    : tarjetas.reduce((m, c) => cuentaDeuda(c.id) > cuentaDeuda(m.id) ? c : m, tarjetas[0]).id;
+  const origenes = origenesPagoTarjeta();
+  if (!origenes.some(e => e.id === _ptOrigen)) {
+    _ptOrigen = origenes.reduce((m, e) => saldoOrigen(e.id) > saldoOrigen(m.id) ? e : m, origenes[0]).id;
+  }
+  const optsCard = tarjetas.map(c => `<option value="${c.id}"${c.id === _ptCard ? ' selected' : ''}>${esc(c.name)} · debes ${fmt(Math.max(0, cuentaDeuda(c.id)))}</option>`).join('');
+  const optsOrigen = origenes.map(e => `<option value="${e.id}"${e.id === _ptOrigen ? ' selected' : ''}>${esc(e.label)} · ${fmt(saldoOrigen(e.id))}</option>`).join('');
+  modalMode = 'pago-tarjeta';
+  openModal('💳 Pagar tarjeta', `
+    <div class="form-group">
+      <label class="form-label" for="pt-card">Tarjeta *</label>
+      <select class="form-input" id="pt-card" onchange="ptCambiarTarjeta()">${optsCard}</select>
+    </div>
+    <div id="pt-resumen" class="pt-resumen"></div>
+
+    <label class="form-label">¿Cuánto vas a pagar? *</label>
+    <div class="pt-chips" id="pt-chips"></div>
+    <div class="form-group">
+      <input class="form-input" type="text" inputmode="numeric" data-money id="pt-monto"
+             placeholder="$ 0" oninput="ptPreview()" aria-label="Monto a pagar">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="pt-origen">¿De dónde sale la plata? *</label>
+      <select class="form-input" id="pt-origen" onchange="ptPreview()">${optsOrigen}</select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="pt-fecha">Fecha del pago *</label>
+      <input class="form-input" type="date" id="pt-fecha" value="${todayISO()}" onchange="ptPreview()">
+    </div>
+
+    <details class="pt-extra" id="pt-extra">
+      <summary>¿El banco te cobró intereses o cuota de manejo?</summary>
+      <div style="font-size:.76rem;color:var(--text2);margin:.45rem 0 .5rem;line-height:1.45">
+        Si el extracto del banco trae más de lo que Kasa dice que debes, anota aquí la diferencia
+        (intereses, cuota de manejo, seguros). Se registra como gasto en la tarjeta para que tu deuda
+        cuadre con el banco y el pago la deje en cero.
+      </div>
+      <input class="form-input" type="text" inputmode="numeric" data-money id="pt-cargos"
+             placeholder="$ 0" oninput="ptPreview()" aria-label="Intereses o cuota de manejo">
+    </details>
+
+    <div class="recon-diff-preview" id="pt-preview">
+      <div class="rd-label" id="pt-preview-label">Así quedas</div>
+      <div class="rd-val" id="pt-preview-val" style="font-family:inherit;font-weight:500;font-size:.88rem;line-height:1.6">—</div>
+    </div>
+    <p class="muted" style="font-size:.75rem;margin:-.25rem 0 1rem;line-height:1.45">
+      ℹ️ Pagar la tarjeta <strong>no es un gasto</strong> y no cambia tu Total Disponible: cada compra ya se
+      descontó cuando la registraste. Lo que cambia es que baja la plata del origen y baja lo que debes.
+    </p>
+    <button class="btn-primary" id="pt-btn" onclick="savePagoTarjeta()">Pagar</button>
+  `);
+  ptCambiarTarjeta(montoPreset);
+}
+
+// Pinta el resumen y los botones de monto de la tarjeta elegida.
+function ptCambiarTarjeta(montoPreset) {
+  const sel = document.getElementById('pt-card');
+  if (!sel) return;
+  _ptCard = sel.value;
+  const c = cuentas.find(x => x.id === _ptCard);
+  if (!c) return;
+  const ci = creditoPagoExigible(c.id);
+  const deuda = Math.max(0, cuentaDeuda(c.id));
   const fc = d => fechaCorta(todayISO(d));
-  const sugerido = ci && ci.exigible > 0 ? ci.exigible : deuda;
-  const detalle = ci && ci.exigible > 0
-    ? `Para no pagar intereses paga ${fmt(ci.exigible)} antes del ${fc(ci.pago0)} (extracto del corte ${fc(ci.x0)}). Deuda total: ${fmt(deuda)}.`
-    : `El último extracto está al día. Deuda total: ${fmt(deuda)} (puedes abonar por adelantado).`;
-  openTrasladoModal(origen, 'cuenta:' + id, {
-    titulo: '💰 Pagar ' + cuentaName(id),
-    intro: detalle + ' Elige de dónde sale la plata (efectivo o una cuenta débito). ' +
-           'El pago baja la deuda y libera cupo; no cuenta como gasto porque cada compra ya se registró.',
-    monto: sugerido
+  const dP = diasRestantes(ci.pago0);
+  const cupo = Number(c.cupo) || 0;
+  const ult = pagosDeTarjeta(c.id)[0];
+  document.getElementById('pt-resumen').innerHTML = `
+    <div class="pt-res-fila"><span>Debes en total</span><strong style="color:${deuda > 0 ? 'var(--danger-text)' : 'var(--ok)'}">${fmt(deuda)}</strong></div>
+    ${ci.exigible > 0
+      ? `<div class="pt-res-fila ${dP < 0 ? 'vencido' : ''}"><span>Pago del extracto (corte ${fc(ci.x0)})</span><strong>${fmt(ci.exigible)}</strong></div>
+         <div class="pt-res-nota ${dP < 0 ? 'vencido' : ''}">${dP < 0 ? `⚠ Venció el ${fc(ci.pago0)} (hace ${-dP} días): págalo ya para no generar más intereses.` : `Págalo antes del ${fc(ci.pago0)} (${dP === 0 ? 'hoy' : dP === 1 ? 'mañana' : 'en ' + dP + ' días'}) y no pagas intereses.`}</div>`
+      : `<div class="pt-res-nota">✅ El extracto del corte ${fc(ci.x0)} está al día. Lo que debes es del corte en curso (cierra el ${fc(ci.x1)}): puedes abonar por adelantado.</div>`}
+    ${cupo > 0 ? `<div class="pt-res-fila"><span>Cupo disponible</span><span>${fmt(Math.max(0, cupo - deuda))} de ${fmt(cupo)}</span></div>` : ''}
+    ${ult ? `<div class="pt-res-nota">Último pago: ${fmt(ult.amount)} el ${fechaCorta(ult.date)} desde ${esc(endpointLabel(ult.from))}</div>` : ''}`;
+
+  const chips = [];
+  if (ci.exigible > 0) chips.push({ v: ci.exigible, t: 'Pago del extracto' });
+  if (deuda > 0 && deuda !== ci.exigible) chips.push({ v: deuda, t: 'Todo lo que debes' });
+  document.getElementById('pt-chips').innerHTML = chips.map(x =>
+    `<button type="button" class="filter-chip pt-chip" data-v="${x.v}">${x.t}<br><strong>${fmt(x.v)}</strong></button>`).join('')
+    + '<button type="button" class="filter-chip pt-chip" data-v="">Otro valor</button>';
+  document.querySelectorAll('#pt-chips .pt-chip').forEach(b => {
+    b.onclick = () => {
+      const inp = document.getElementById('pt-monto');
+      inp.value = b.dataset.v ? fmtInput(Number(b.dataset.v)) : '';
+      if (!b.dataset.v) inp.focus();
+      ptPreview();
+    };
   });
+  const inicial = montoPreset > 0 ? montoPreset : (chips[0] ? chips[0].v : 0);
+  document.getElementById('pt-monto').value = inicial > 0 ? fmtInput(inicial) : '';
+  ptPreview();
+}
+
+// Valida y calcula el resultado del pago. Devuelve el error o ''.
+function ptEstado() {
+  const monto = moneyVal('pt-monto');
+  const cargos = moneyVal('pt-cargos') || 0;
+  const origen = document.getElementById('pt-origen').value;
+  const deudaAntes = Math.max(0, cuentaDeuda(_ptCard));
+  const deudaConCargos = deudaAntes + cargos;
+  const saldo = saldoOrigen(origen);
+  let error = '';
+  if (!(monto > 0)) error = 'Escribe cuánto vas a pagar';
+  else if (monto > saldo) error = `No te alcanza: en ${endpointLabel(origen)} tienes ${fmt(saldo)} (te faltan ${fmt(monto - saldo)})`;
+  else if (monto > deudaConCargos) error = `Estás pagando ${fmt(monto - deudaConCargos)} más de lo que debes (${fmt(deudaConCargos)}). Si el banco te cobró intereses o cuota de manejo, anótalos abajo en "¿El banco te cobró…?"`;
+  return { monto, cargos, origen, saldo, deudaAntes, deudaConCargos, error };
+}
+
+function ptPreview() {
+  const box = document.getElementById('pt-preview');
+  const val = document.getElementById('pt-preview-val');
+  const lbl = document.getElementById('pt-preview-label');
+  const btn = document.getElementById('pt-btn');
+  if (!box || !val) return;
+  _ptOrigen = document.getElementById('pt-origen').value;
+  const e = ptEstado();
+  const chipsEl = Array.from(document.querySelectorAll('#pt-chips .pt-chip'));
+  const presetActivo = chipsEl.some(b => b.dataset.v && Number(b.dataset.v) === e.monto);
+  chipsEl.forEach(b => b.classList.toggle('active',
+    b.dataset.v ? Number(b.dataset.v) === e.monto : (e.monto > 0 && !presetActivo)));
+  if (btn) btn.textContent = e.monto > 0 ? `Pagar ${fmt(e.monto)}` : 'Pagar';
+  const c = cuentas.find(x => x.id === _ptCard);
+  const cupo = c ? Number(c.cupo) || 0 : 0;
+  if (e.error) {
+    box.className = 'recon-diff-preview' + (e.monto > 0 ? ' neg' : '');
+    if (lbl) lbl.textContent = e.monto > 0 ? 'Revisa el pago' : 'Así quedas';
+    val.innerHTML = esc(e.error);
+    return;
+  }
+  const deudaDespues = e.deudaConCargos - e.monto;
+  box.className = 'recon-diff-preview pos';
+  if (lbl) lbl.textContent = deudaDespues === 0 ? '🎉 La tarjeta queda en cero' : 'Así quedas';
+  val.innerHTML =
+    `${esc(endpointLabel(e.origen))}: ${fmt(e.saldo)} → <strong>${fmt(e.saldo - e.monto)}</strong><br>` +
+    `Deuda ${esc(c ? c.name : '')}: ${fmt(e.deudaAntes)}${e.cargos ? ` + ${fmt(e.cargos)} de cargos` : ''} → <strong>${fmt(deudaDespues)}</strong>` +
+    (cupo > 0 ? `<br>Cupo disponible: <strong>${fmt(Math.max(0, cupo - deudaDespues))}</strong>` : '');
+}
+
+async function savePagoTarjeta() {
+  const c = cuentas.find(x => x.id === _ptCard);
+  if (!c || cuentaTipo(c.id) !== 'credito') { showToast('⚠ Elige una tarjeta de crédito'); return; }
+  const e = ptEstado();
+  const date = document.getElementById('pt-fecha').value;
+  const errMonto = validarMonto(e.monto);
+  if (errMonto) { showToast(errMonto); return; }
+  if (e.cargos) { const errC = validarMonto(e.cargos); if (errC) { showToast(errC); return; } }
+  const errFecha = validarFecha(date);
+  if (errFecha) { showToast(errFecha); return; }
+  if (!origenesPagoTarjeta().some(x => x.id === e.origen)) { showToast('⚠ Elige de dónde sale la plata'); return; }
+  if (e.error) { showToast('⚠ ' + e.error); return; }
+  if (!tomarCandado()) return;
+  try {
+    // 1) Cargos del banco: gasto en la tarjeta (sube la deuda).
+    if (e.cargos > 0) {
+      await saveTransaction({ id: uid(), type: 'expense', amount: e.cargos, date,
+        category: 'Intereses y comisiones', account: 'transfer', cuentaId: c.id,
+        notes: 'Intereses / cuota de manejo · ' + c.name });
+    }
+    // 2) El pago: traslado del origen hacia la tarjeta (baja ambos).
+    await saveTraslado({ id: uid(), amount: e.monto, from: e.origen, to: 'cuenta:' + c.id, date,
+      notes: 'Pago tarjeta ' + c.name, createdAt: Date.now() });
+    closeModal();
+    const queda = Math.max(0, cuentaDeuda(c.id));
+    showToast(queda > 0
+      ? `✅ Pagaste ${fmt(e.monto)} a ${c.name} · ahora debes ${fmt(queda)}`
+      : `🎉 Pagaste ${fmt(e.monto)}: ${c.name} queda en cero`);
+    renderPage(currentPage);
+  } catch (err) {
+    console.error('Error pagando tarjeta:', err);
+    showToast('❌ No se pudo guardar el pago. Intenta de nuevo.');
+  } finally { soltarCandado(); }
+}
+
+// Últimos pagos de la tarjeta, con opción de deshacerlos. Antes el pago
+// solo aparecía en Conciliación → Traslados y parecía que no se guardaba.
+function pagosRecientesHTML(id) {
+  const pagos = pagosDeTarjeta(id);
+  if (!pagos.length) return '';
+  const filas = pagos.slice(0, 3).map(p => `
+    <div class="tc-pago">
+      <span>✓ ${fechaCorta(p.date)} · desde ${esc(endpointLabel(p.from))}</span>
+      <strong>${fmt(p.amount)}</strong>
+      <button type="button" class="tc-pago-del" data-del-pago="${p.id}" title="Deshacer este pago" aria-label="Deshacer este pago">✕</button>
+    </div>`).join('');
+  return `<div class="tc-pagos"><div class="tc-pagos-tit">Pagos recientes${pagos.length > 3 ? ` (${pagos.length}, todos en Conciliación → Traslados)` : ''}</div>${filas}</div>`;
 }
 
 function verMovsCuenta(id) {
@@ -3308,7 +3544,7 @@ function renderCuentas() {
         </select>`;
 
       // ── Bloque de crédito: deuda, cupo, corte, pago, cuotas ──
-      let montoHtml, extraHtml = '', btnPagar = '';
+      let montoHtml, extraHtml = '';
       if (c.tipo === 'credito') {
         const deuda = cuentaDeuda(c.id);
         montoHtml = deuda > 0
@@ -3346,15 +3582,18 @@ function renderCuentas() {
         extraHtml = `
           <div class="tc-ciclo">
             ${pagoAhora}
-            <div class="tc-linea">✂️ <span>Corte en curso cierra el ${fc(ci.x1)} (${txtDias(dC)}) · van <strong>${fmt(ci.alCorte)}</strong> → se pagan el ${fc(ci.pago1)}</span></div>
+            <div class="tc-linea">✂️ <span>Corte en curso cierra el ${fc(ci.x1)} (${txtDias(dC)}) · van <strong>${fmt(ci.alCorte)}</strong>${ci.alCortePend < ci.alCorte ? ` (ya abonaste ${fmt(ci.alCorte - ci.alCortePend)}, faltan <strong>${fmt(ci.alCortePend)}</strong>)` : ''} → se pagan el ${fc(ci.pago1)}</span></div>
             <div class="tc-linea">🛒 <span>Si compras hoy, pagas el ${fc(ci.compraHoy.pago)} (${ci.compraHoy.dias} días)</span></div>
             ${ci.enOro
               ? `<div class="tc-linea oro activo">🌟 <span><strong>¡Estás en días oro!</strong> Lo que compres hoy lo pagas el ${fc(ci.compraHoy.pago)} (<strong>${ci.compraHoy.dias} días</strong> de plazo). ${ci.diasOroRestantes === 0 ? 'Hoy es el último día.' : `Aprovecha hasta el ${fc(ci.finOro)}.`} <span style="color:var(--text3)">(ventana de ${diasOroDe(full)} ${diasOroDe(full) === 1 ? 'día' : 'días'} · cámbiala con ✏️)</span></span></div>`
               : `<div class="tc-linea oro">🌟 <span><strong>Próximo día oro: ${fc(ci.diaOro)}</strong> · lo que compres ese día lo pagas el ${fc(ci.oro.pago)} (<strong>${ci.oro.dias} días</strong> de plazo) <span style="color:var(--text3)">· ventana de ${diasOroDe(full)} ${diasOroDe(full) === 1 ? 'día' : 'días'}, cámbiala con ✏️</span></span></div>`}
             ${pend.n > 0 ? `<div class="tc-linea">⏳ <span>${pend.n} cuota(s) por facturar · ${fmt(pend.monto)}</span></div>` : ''}
           </div>
-          ${cupoTxt}`;
-        btnPagar = deuda > 0 ? `<button class="tx-btn pay" data-id="${c.id}" title="Pagar tarjeta">💰</button>` : '';
+          ${cupoTxt}
+          <button type="button" class="tc-pagar ${ci.exigible > 0 && dP0 < 0 ? 'urgente' : ''}" data-pay="${c.id}" ${deuda > 0 ? '' : 'disabled'}>
+            💰 ${deuda > 0 ? (ci.exigible > 0 ? 'Pagar tarjeta · ' + fmt(ci.exigible) : 'Abonar a la tarjeta') : 'Sin deuda por pagar'}
+          </button>
+          ${pagosRecientesHTML(c.id)}`;
       } else {
         montoHtml = `<div class="fijo-amount" style="color:${c.balance >= 0 ? 'var(--blue)' : 'var(--danger)'}">${fmt(c.balance)}</div>`;
       }
@@ -3372,7 +3611,7 @@ function renderCuentas() {
         <div class="tx-actions" style="margin-left:.5rem">
           <button class="tx-btn recon" data-id="${c.id}" title="Conciliar saldo">⚖️</button>
           ${c.tipo === 'credito'
-            ? btnPagar
+            ? ''
             : `<button class="tx-btn move" data-id="${c.id}" title="Trasladar a/desde esta cuenta">⇄</button>`}
           <button class="tx-btn view" data-id="${c.id}" title="Ver movimientos">👁</button>
           <button class="tx-btn edit" data-id="${c.id}" title="Editar">✏️</button>
@@ -3390,8 +3629,11 @@ function renderCuentas() {
     list.querySelectorAll('.tx-btn.move').forEach(b => {
       b.onclick = () => openTrasladoModal('cuenta:' + b.dataset.id, 'efectivo');
     });
-    list.querySelectorAll('.tx-btn.pay').forEach(b => {
-      b.onclick = () => pagarTarjeta(b.dataset.id);
+    list.querySelectorAll('[data-pay]').forEach(b => {
+      b.onclick = () => pagarTarjeta(b.dataset.pay);
+    });
+    list.querySelectorAll('[data-del-pago]').forEach(b => {
+      b.onclick = () => confirmDeleteTraslado(b.dataset.delPago);
     });
     list.querySelectorAll('.tx-btn.view').forEach(b => {
       b.onclick = () => verMovsCuenta(b.dataset.id);
@@ -5562,7 +5804,7 @@ function proximosPagos() {
     const fecha = ci.pago0;
     const dias = diasRestantes(fecha);
     if (dias > PAGOS_VENTANA) return;
-    items.push({ icon: '💳', name: c.name, tipo: 'Tarjeta · extracto del ' + fechaCorta(todayISO(ci.x0)), monto: ci.exigible, fecha, dias, page: 'cuentas' });
+    items.push({ icon: '💳', name: c.name, tipo: 'Tarjeta · extracto del ' + fechaCorta(todayISO(ci.x0)), monto: ci.exigible, fecha, dias, page: 'cuentas', tarjeta: c.id });
   });
   return items.sort((a, b) => a.fecha - b.fecha);
 }
@@ -5597,17 +5839,21 @@ function renderProximosPagos() {
   document.getElementById('dash-pagos-total').textContent = 'Total ' + fmt(items.reduce((s, x) => s + x.monto, 0));
   const list = document.getElementById('dash-pagos-list');
   list.innerHTML = items.map(x => `
-    <div class="pp-row ${x.dias < 0 ? 'vencido' : ''}" data-page="${x.page}" role="button" tabindex="0">
+    <div class="pp-row ${x.dias < 0 ? 'vencido' : ''}" data-page="${x.page}" data-tarjeta="${x.tarjeta || ''}" role="button" tabindex="0" ${x.tarjeta ? 'title="Toca para pagar la tarjeta"' : ''}>
       <div class="pp-ico" aria-hidden="true">${x.icon}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:500;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.name)}</div>
         <div style="font-size:.74rem;color:var(--text2)">${x.tipo} · ${fechaCorta(todayISO(x.fecha))} · <span class="pp-dias">${textoDias(x.dias)}</span></div>
       </div>
-      <div style="font-family:var(--font-head);font-weight:700;font-size:.92rem;white-space:nowrap">${fmt(x.monto)}</div>
+      <div style="text-align:right">
+        <div style="font-family:var(--font-head);font-weight:700;font-size:.92rem;white-space:nowrap">${fmt(x.monto)}</div>
+        ${x.tarjeta ? '<div style="font-size:.7rem;font-weight:600;color:var(--accent-text)">Pagar ›</div>' : ''}
+      </div>
     </div>`).join('');
+  const abrir = r => r.dataset.tarjeta ? pagarTarjeta(r.dataset.tarjeta) : goToPage(r.dataset.page);
   list.querySelectorAll('.pp-row').forEach(r => {
-    r.onclick = () => goToPage(r.dataset.page);
-    r.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToPage(r.dataset.page); } };
+    r.onclick = () => abrir(r);
+    r.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(r); } };
   });
 }
 
@@ -5779,6 +6025,20 @@ function appConfirm(message, confirmLabel) {
   });
 }
 
+/* Pregunta de dos opciones (ninguna destructiva). Resuelve true/false. */
+function appElegir(message, labelSi, labelNo) {
+  return new Promise(resolve => {
+    openModal('Antes de guardar', `
+      <p style="margin-bottom:1.25rem;font-size:.92rem;line-height:1.5">${message}</p>
+      <button class="btn-primary" id="ae-si">${labelSi}</button>
+      <button class="btn-primary" style="background:var(--bg2);color:var(--text);border:1px solid var(--border)" id="ae-no">${labelNo}</button>
+    `);
+    const fin = r => { closeModal(); resolve(r); };
+    document.getElementById('ae-si').onclick = () => fin(true);
+    document.getElementById('ae-no').onclick = () => fin(false);
+  });
+}
+
 function openFabModal() {
   openModal('Nueva entrada', `
     <p class="muted" style="margin-bottom:1rem">¿Qué quieres registrar?</p>
@@ -5799,8 +6059,15 @@ function openFabModal() {
         <div class="qt-icon">📌</div>
         <div class="qt-label">Gasto Fijo</div>
       </div>
+      ${tarjetasCredito().length ? `
+      <div class="quick-type-btn" id="qt-pagotc" style="flex-basis:100%">
+        <div class="qt-icon">💳</div>
+        <div class="qt-label">Pagar tarjeta de crédito</div>
+      </div>` : ''}
     </div>
   `);
+  const btnTc = document.getElementById('qt-pagotc');
+  if (btnTc) btnTc.onclick = () => pagarTarjeta();
   document.getElementById('qt-income').onclick = () => { _typeSelected = 'income'; _accountSelected = 'efectivo'; openTxForm('income'); };
   document.getElementById('qt-expense').onclick = () => { _typeSelected = 'expense'; _accountSelected = 'efectivo'; openTxForm('expense'); };
   document.getElementById('qt-saving').onclick = () => { _typeSelected = 'saving'; _accountSelected = 'efectivo'; openTxForm('saving'); };
@@ -5977,6 +6244,23 @@ async function saveTxForm(type, existingId) {
   // Meta de ahorro: solo en ahorros y si la meta sigue existiendo.
   const metaSel = document.getElementById('f-meta');
   const metaId = (finalType === 'saving' && metaSel && metas.some(m => m.id === metaSel.value)) ? metaSel.value : '';
+
+  // "Pago tarjeta" registrado como gasto: contaba el gasto dos veces (ya
+  // estaba en cada compra) y la deuda de la tarjeta no bajaba. Se ofrece
+  // registrarlo como pago.
+  if (finalType === 'expense' && !existingId && !(cuentaId && cuentaTipo(cuentaId) === 'credito')
+      && tarjetasCredito().length && /tarjeta|\btc\b/i.test(notes)) {
+    const esPago = await appElegir('¿Estás <strong>pagando una tarjeta de crédito</strong>? Regístralo como pago: '
+      + 'como gasto se contaría dos veces (cada compra ya está anotada) y la deuda de la tarjeta no bajaría.',
+      '💳 Sí, es pago de tarjeta', 'No, es un gasto normal');
+    if (esPago) {
+      const tc = tarjetasCredito().find(c => notes.toLowerCase().includes(String(c.name).toLowerCase()));
+      _ptOrigen = account === 'efectivo' ? 'efectivo' : (cuentaId ? 'cuenta:' + cuentaId : 'transfer');
+      pagarTarjeta(tc ? tc.id : '', amount);
+      return;
+    }
+    // "No": se guarda como gasto normal (los valores ya se leyeron del formulario).
+  }
 
   const tx = { id: existingId || uid(), type: finalType, amount, date, category, account, notes, cuentaId };
   if (cuotas > 1) tx.cuotas = cuotas;
@@ -6445,6 +6729,11 @@ async function saveTrasladoForm() {
   }
   if (amount > (Number(endpointBookBalance(from)) || 0)) {
     showToast('⚠ No tienes saldo suficiente en ' + endpointLabel(from) + ' (' + fmt(endpointBookBalance(from)) + ')');
+    return;
+  }
+  // Hacia una tarjeta = pago: no más de lo que se debe (si no, queda "a favor").
+  if (esEndpointCredito(to) && amount > Math.max(0, cuentaDeuda(to.slice(7)))) {
+    showToast(`⚠ En ${endpointLabel(to)} debes ${fmt(Math.max(0, cuentaDeuda(to.slice(7))))}. Para intereses o cuota de manejo usa 💳 Pagar tarjeta.`);
     return;
   }
   if (!tomarCandado()) return;

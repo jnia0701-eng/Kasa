@@ -289,3 +289,32 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
   del pago.
 - El formato de datos no cambia (IndexedDB v7, JSON 9; los pagos nuevos guardan el
   campo `ciclo`).
+
+---
+
+## v8 · Pagar la tarjeta de crédito, fácil y cuadrado
+
+**💳 Pagar tarjeta, a la vista**
+- Nuevo botón **"💰 Pagar tarjeta · $X"** dentro de cada tarjeta en Cuentas (antes era un
+  icono pequeño sin texto). Se pone en rojo si el extracto está vencido.
+- También en **+ → Pagar tarjeta de crédito** y tocando la tarjeta en **Próximos pagos** del Inicio.
+- Modal propio: eliges la tarjeta, ves cuánto debes, el pago del extracto y hasta cuándo,
+  y tocas **Pago del extracto**, **Todo lo que debes** u **Otro valor**. Eliges de dónde sale
+  la plata (efectivo o débito) y ves antes de guardar cómo quedan el origen, la deuda y el cupo.
+
+**🧮 Que se descuente bien**
+- **Intereses y cuota de manejo**: si el extracto del banco trae más de lo que Kasa dice, se
+  anotan en el mismo pago. Se registran como gasto ("Intereses y comisiones") en la tarjeta,
+  así la deuda cuadra con el banco y el pago la deja en cero.
+- Ya no se puede pagar más de lo que se debe por error (antes la tarjeta quedaba "a favor").
+  Aplica también al traslado genérico hacia una tarjeta.
+- **Compras a cuotas**: la última cuota absorbe el redondeo. Antes 3 cuotas de $100.000
+  sumaban $99.999 y quedaba un saldo "fantasma" que el extracto nunca cobraba.
+- Si registras un **gasto** que dice "tarjeta" (ej. "Pago tarjeta Visa"), Kasa pregunta si es
+  un pago: como gasto se contaba dos veces y la deuda no bajaba.
+- **Pagos recientes** en cada tarjeta (con ✕ para deshacer). Antes el pago solo aparecía en
+  Conciliación → Traslados y parecía que no se había guardado.
+- El corte en curso muestra lo que ya abonaste por adelantado y lo que falta.
+- Recordatorio: pagar la tarjeta **no es gasto** y no cambia el Total Disponible; cada compra
+  ya se descontó al registrarla. Baja la plata del origen y baja la deuda en lo mismo.
+- El formato de datos no cambia (IndexedDB v7, JSON 9).
