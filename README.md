@@ -101,6 +101,10 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
    ```js
    const CACHE_VERSION = 'kasa-v2.0.0'; // ← incrementa este número
    ```
+   Y actualiza la versión que se ve bajo el logo en `index.html`:
+   ```js
+   const APP_VERSION = 'v9 · 2.5.1'; // ← mismo número que CACHE_VERSION
+   ```
 3. Al abrir la app instalada aparecerá el aviso **"Nueva versión
    disponible · Actualizar"**. Un toque y se recarga sola: ya no hace
    falta cerrarla desde el multitarea.
@@ -289,3 +293,58 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
   del pago.
 - El formato de datos no cambia (IndexedDB v7, JSON 9; los pagos nuevos guardan el
   campo `ciclo`).
+
+---
+
+## v8 · Pagar la tarjeta de crédito, fácil y cuadrado
+
+**💳 Pagar tarjeta, a la vista**
+- Nuevo botón **"💰 Pagar tarjeta · $X"** dentro de cada tarjeta en Cuentas (antes era un
+  icono pequeño sin texto). Se pone en rojo si el extracto está vencido.
+- También en **+ → Pagar tarjeta de crédito** y tocando la tarjeta en **Próximos pagos** del Inicio.
+- Modal propio: eliges la tarjeta, ves cuánto debes, el pago del extracto y hasta cuándo,
+  y tocas **Pago del extracto**, **Todo lo que debes** u **Otro valor**. Eliges de dónde sale
+  la plata (efectivo o débito) y ves antes de guardar cómo quedan el origen, la deuda y el cupo.
+
+**🧮 Que se descuente bien**
+- **Intereses y cuota de manejo**: si el extracto del banco trae más de lo que Kasa dice, se
+  anotan en el mismo pago. Se registran como gasto ("Intereses y comisiones") en la tarjeta,
+  así la deuda cuadra con el banco y el pago la deja en cero.
+- Ya no se puede pagar más de lo que se debe por error (antes la tarjeta quedaba "a favor").
+  Aplica también al traslado genérico hacia una tarjeta.
+- **Compras a cuotas**: la última cuota absorbe el redondeo. Antes 3 cuotas de $100.000
+  sumaban $99.999 y quedaba un saldo "fantasma" que el extracto nunca cobraba.
+- Si registras un **gasto** que dice "tarjeta" (ej. "Pago tarjeta Visa"), Kasa pregunta si es
+  un pago: como gasto se contaba dos veces y la deuda no bajaba.
+- **Pagos recientes** en cada tarjeta (con ✕ para deshacer). Antes el pago solo aparecía en
+  Conciliación → Traslados y parecía que no se había guardado.
+- El corte en curso muestra lo que ya abonaste por adelantado y lo que falta.
+- Recordatorio: pagar la tarjeta **no es gasto** y no cambia el Total Disponible; cada compra
+  ya se descontó al registrarla. Baja la plata del origen y baja la deuda en lo mismo.
+- El formato de datos no cambia (IndexedDB v7, JSON 9).
+
+---
+
+## v9 · La conciliación ya cuenta en el presupuesto
+
+Antes una conciliación solo **ajustaba** el saldo: si faltaban $30.000 en efectivo, el saldo
+quedaba bien pero esos $30.000 no aparecían en el presupuesto ni en el Estado de Resultados.
+
+**💸 ¿En qué se fueron esos $X?**
+- Al conciliar, si falta plata (o la deuda de la tarjeta subió), Kasa pregunta qué fue:
+  - **Gasto que no anoté** (por defecto): eliges categoría y monto. Se registra como gasto
+    real, **cuenta en el presupuesto** del mes y en los reportes. Si pones menos que la
+    diferencia, el resto queda como ajuste.
+  - **Solo ajustar**: como antes. Para errores de registro o si no sabes qué pasó.
+- Si sobra plata, ofrece registrarla como **ingreso que no anoté** (por defecto, solo ajuste).
+- En tarjetas de crédito, la deuda que sube se sugiere como "Intereses y comisiones".
+- El saldo final es exactamente el mismo: lo que cambia es que el gasto se ve donde debe.
+
+**🔁 Conciliaciones viejas**
+- En el historial, cada conciliación con diferencia tiene **"💸 Registrar como gasto"**
+  (o ingreso): convierte esa diferencia, o una parte, en movimiento con la fecha de la
+  conciliación. El saldo no cambia; el gasto entra al presupuesto de ese mes.
+- El historial muestra el gasto registrado y el ajuste que quedó.
+- Ese movimiento se borra desde su conciliación (al borrarla, Kasa pregunta si también
+  borras el gasto), para que el saldo no se descuadre.
+- Datos: la conciliación guarda `txId` del movimiento (incluido en el respaldo JSON).
