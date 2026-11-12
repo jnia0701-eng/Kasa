@@ -3,7 +3,7 @@
    Sube la versión (CACHE_VERSION) cada vez que cambies la app
    para forzar la actualización del caché en los dispositivos.
 ───────────────────────────────────────────────────────── */
-const CACHE_VERSION = 'kasa-v2.4.0';
+const CACHE_VERSION = 'kasa-v2.5.0';
 const APP_SHELL = `${CACHE_VERSION}-shell`;
 const RUNTIME = `${CACHE_VERSION}-runtime`;
 

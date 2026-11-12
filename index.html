@@ -414,6 +414,13 @@ a{text-decoration:none;color:inherit}
 .tc-pago span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tc-pago strong{color:var(--ok);white-space:nowrap}
 .tc-pago-del{border:none;background:none;color:var(--text3);cursor:pointer;font-size:.8rem;padding:.1rem .3rem}
+/* Conciliación: ¿qué fue esa diferencia? */
+.rf-motivo{background:var(--bg2);border-radius:var(--r);padding:.8rem .9rem;margin-bottom:1rem}
+.rf-motivo-tit{font-weight:600;font-size:.88rem;margin-bottom:.55rem}
+.rf-motivo .tab-switch-btn{font-size:.78rem}
+.rf-motivo-nota{font-size:.74rem;color:var(--text2);line-height:1.45}
+.ri-convertir{margin-top:.35rem;border:1px solid var(--border2);background:var(--card);color:var(--text);
+  border-radius:99px;padding:.25rem .65rem;font-size:.72rem;font-weight:600;cursor:pointer}
 /* Modal Pagar tarjeta */
 .pt-resumen{background:var(--bg2);border-radius:var(--r);padding:.75rem .9rem;margin-bottom:1rem;display:flex;flex-direction:column;gap:.3rem}
 .pt-res-fila{display:flex;justify-content:space-between;gap:.5rem;font-size:.85rem}
@@ -1050,7 +1057,7 @@ body.modal-open{overflow:hidden}
         <button class="icon-btn" id="add-btn-conciliacion">＋</button>
       </div>
     </div>
-    <p class="muted" style="margin-bottom:1rem">Compara tu saldo real (efectivo o digital) contra lo registrado: la diferencia se <strong>suma al total</strong> de esa tarjeta y queda guardada como tu ganancia o total hecho en el periodo. Con ⇄ mueves plata entre bolsillos sin afectar el total.</p>
+    <p class="muted" style="margin-bottom:1rem">Compara tu saldo real (efectivo o digital) contra lo registrado: la diferencia se <strong>suma al total</strong> de esa tarjeta y queda guardada como tu ganancia o total hecho en el periodo. Si la plata que falta fue un gasto que no anotaste, elige <strong>💸 Gasto que no anoté</strong> para que cuente en el presupuesto (también en conciliaciones viejas). Con ⇄ mueves plata entre bolsillos sin afectar el total.</p>
 
     <div class="recon-summary">
       <div class="recon-card">
@@ -4906,6 +4913,13 @@ function renderConciliacion() {
       <div class="ri-info">
         <div class="ri-main">${ACCOUNT_LABELS[b.account]}${b.cuentaId ? ' · ' + esc(cuentaName(b.cuentaId)) + (cuentaTipo(b.cuentaId) === 'credito' ? ' (crédito)' : '') : ''} · ${dateStr}</div>
         <div class="ri-sub">${fmt(b.previousAmount)} → ${fmt(b.amount)}${b.notes ? ' · ' + esc(b.notes) : ''}</div>
+        ${(() => {
+          const tx = b.txId ? transactions.find(t => t.id === b.txId) : null;
+          const lineaTx = tx ? `<div class="ri-sub" style="color:var(--text)">${tx.type === 'expense' ? '💸 Gasto' : '📈 Ingreso'} ${fmt(tx.amount)} · ${esc(tx.category)}${Math.round(b.diff) ? ' · ajuste ' + sign + fmt(b.diff) : ''}</div>` : '';
+          const tipo = Math.round(b.diff) ? tipoMovRecon(b.diff, b.cuentaId || '') : null;
+          const btn = tipo ? `<button type="button" class="ri-convertir" data-conv="${b.id}">${tipo === 'expense' ? '💸 Registrar como gasto' : '📈 Registrar como ingreso'}</button>` : '';
+          return lineaTx + btn;
+        })()}
       </div>
       <div class="ri-diff" style="color:${color}">${sign}${fmt(b.diff)}</div>
       <div class="tx-actions" style="margin-left:.25rem">
@@ -4915,6 +4929,9 @@ function renderConciliacion() {
   }).join('');
   list.querySelectorAll('.tx-btn.del').forEach(btn => {
     btn.onclick = () => confirmDeleteReconciliation(btn.dataset.id);
+  });
+  list.querySelectorAll('[data-conv]').forEach(btn => {
+    btn.onclick = () => abrirConvertirRecon(btn.dataset.conv);
   });
   renderTrasladosList();
 }
@@ -4973,8 +4990,18 @@ async function confirmDeleteReconciliation(id) {
     const errSaldo = validarSalida(bolsilloDe(rec.account, rec.cuentaId), Number(rec.diff));
     if (errSaldo) { showToast(errSaldo.replace('⚠ Saldo', '⚠ No puedes eliminar esta conciliación: saldo')); return; }
   }
-  if (!(await appConfirm('¿Eliminar este registro de conciliación? Esta acción no se puede deshacer.'))) return;
+  const txV = rec && rec.txId ? transactions.find(t => t.id === rec.txId) : null;
+  let borrarTx = false;
+  if (txV) {
+    borrarTx = await appElegir(`Esta conciliación registró un ${txV.type === 'expense' ? 'gasto' : 'ingreso'} de <strong>${fmt(txV.amount)}</strong> (${esc(txV.category)}). ¿Lo borras también?`,
+      '🗑 Borrar conciliación y ' + (txV.type === 'expense' ? 'gasto' : 'ingreso'), 'Solo la conciliación (dejar el movimiento)');
+    if (borrarTx && txV.type === 'income') {
+      const errI = validarSaldoMovimiento(null, txV);
+      if (errI) { showToast(errI.replace('⚠ Saldo insuficiente', '⚠ No puedes borrar ese ingreso: saldo insuficiente')); return; }
+    }
+  } else if (!(await appConfirm('¿Eliminar este registro de conciliación? Esta acción no se puede deshacer.'))) return;
   try {
+    if (borrarTx) await deleteTransaction(txV.id);
     await deleteBalanceRecord(id);
     showToast('🗑 Eliminado');
     renderPage(currentPage);
@@ -6308,6 +6335,8 @@ function pagoVinculadoA(txId) {
   for (const pr of prestamos) {
     if ((pr.pagos || []).some(x => x.txId === txId)) return { nombre: pr.name, lugar: 'Patrimonio → préstamo → tabla (🗑 en la cuota)' };
   }
+  // Gasto/ingreso nacido de una conciliación: borrarlo suelto descuadraba el saldo.
+  if (balances.some(b => b.txId === txId)) return { nombre: 'una conciliación', lugar: 'Conciliación (🗑 en esa conciliación)' };
   return null;
 }
 
@@ -6444,6 +6473,7 @@ function openReconciliationModal(account, cuentaId) {
   _reconAccount = account || 'efectivo';
   _reconCuentaId = (_reconAccount === 'transfer' && cuentaId) ? cuentaId : '';
   modalMode = 'recon';
+  _motivoClave = '';
   const today = todayISO();
   // En crédito se concilia la DEUDA con el extracto (positiva).
   const esCred = _reconAccount === 'transfer' && _reconCuentaId
@@ -6483,6 +6513,7 @@ function openReconciliationModal(account, cuentaId) {
       <div class="rd-label" id="rf-preview-label">${esCred ? 'Cambio en la deuda' : 'Diferencia / Total hecho'}</div>
       <div class="rd-val" id="rf-preview-val">$0</div>
     </div>
+    <div id="rf-motivo" class="rf-motivo" style="display:none"></div>
     <div class="form-group">
       <label class="form-label">Nota (opcional)</label>
       <input class="form-input" type="text" id="rf-notes" placeholder="${esCred ? 'Ej: Extracto de la tarjeta' : 'Ej: Corte de caja del mes'}">
@@ -6544,10 +6575,12 @@ function updateReconPreview() {
   if (!raw) {
     previewBox.className = 'recon-diff-preview';
     previewVal.textContent = fmt(0);
+    pintarMotivoRecon(0);
     return;
   }
   const amount = parseMoney(amountEl.value);
   const diff = amount - previous;
+  pintarMotivoRecon(diff);
   const esCredito = _reconAccount === 'transfer' && _reconCuentaId && cuentaTipo(_reconCuentaId) === 'credito';
   // En crédito, que la deuda BAJE es lo bueno: se invierten los colores.
   const cls = esCredito
@@ -6555,6 +6588,170 @@ function updateReconPreview() {
     : (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : ''));
   previewBox.className = 'recon-diff-preview ' + cls;
   previewVal.textContent = (diff >= 0 ? '+' : '') + fmt(diff);
+}
+
+/* ── ¿QUÉ FUE ESA DIFERENCIA? ──────────────────────────────
+   Una conciliación solo AJUSTA el saldo: no es gasto ni ingreso, así que
+   no cuenta en el presupuesto ni en el Estado de Resultados. Pero casi
+   siempre la plata que "falta" es un gasto que no se anotó (un café, un
+   parqueadero, intereses de la tarjeta). Aquí se puede decir qué fue:
+   esa parte se registra como movimiento real (con categoría) y la
+   conciliación guarda solo el resto como ajuste. El saldo final es el
+   mismo; lo que cambia es que el gasto sí se ve en el presupuesto.
+   Sentido según el bolsillo:
+     débito/efectivo  diff < 0 → gasto   ·  diff > 0 → ingreso
+     tarjeta crédito  diff > 0 (deuda subió) → gasto en la tarjeta */
+let _reconMotivo = 'mov';        // 'mov' (registrar movimiento) | 'ajuste'
+
+function tipoMovRecon(diff, cuentaId) {
+  const esCred = cuentaId && cuentaTipo(cuentaId) === 'credito';
+  if (esCred) return diff > 0 ? 'expense' : null;
+  if (diff < 0) return 'expense';
+  if (diff > 0) return 'income';
+  return null;
+}
+
+// Diferencia que queda como ajuste después de registrar el movimiento.
+function residuoRecon(diff, tx, cuentaId) {
+  const m = Number(tx.amount) || 0;
+  const esCred = cuentaId && cuentaTipo(cuentaId) === 'credito';
+  if (esCred) return diff - m;                 // gasto en tarjeta sube la deuda
+  return tx.type === 'expense' ? diff + m : diff - m;
+}
+
+function htmlMotivoRecon(tipo, abs, prefijo, catDefault) {
+  const cats = tipo === 'expense' ? EXPENSE_CATS : INCOME_CATS;
+  const esGasto = tipo === 'expense';
+  return `
+    <div class="rf-motivo-tit">${esGasto ? `¿En qué se fueron esos ${fmt(abs)}?` : `¿De dónde salieron esos ${fmt(abs)}?`}</div>
+    <div class="tab-switcher" style="margin-bottom:.6rem">
+      <div class="tab-switch-btn ${_reconMotivo === 'mov' ? 'active' : ''}" data-motivo="mov">${esGasto ? '💸 Gasto que no anoté' : '📈 Ingreso que no anoté'}</div>
+      <div class="tab-switch-btn ${_reconMotivo === 'ajuste' ? 'active' : ''}" data-motivo="ajuste">⚖️ Solo ajustar</div>
+    </div>
+    <div id="${prefijo}-mov" style="display:${_reconMotivo === 'mov' ? 'block' : 'none'}">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="${prefijo}-cat">Categoría</label>
+          <select class="form-input" id="${prefijo}-cat">${cats.map(c => `<option${c === catDefault ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="${prefijo}-monto">Monto</label>
+          <input class="form-input" type="text" inputmode="numeric" data-money id="${prefijo}-monto" value="${fmtInput(abs)}">
+        </div>
+      </div>
+      <input class="form-input" type="text" id="${prefijo}-desc" placeholder="${esGasto ? 'Ej: Gastos sueltos, parqueadero…' : 'Ej: Me pagaron un favor'}" style="margin-bottom:.4rem">
+      <div class="rf-motivo-nota">${esGasto
+        ? 'Se registra como gasto: <strong>cuenta en el presupuesto</strong> del mes y en tus reportes. Si pones menos, el resto queda como ajuste.'
+        : 'Se registra como ingreso del mes. Si pones menos, el resto queda como ajuste.'}</div>
+    </div>
+    <div class="rf-motivo-nota" style="display:${_reconMotivo === 'ajuste' ? 'block' : 'none'}" id="${prefijo}-ajuste-nota">
+      Solo corrige el saldo. <strong>No cuenta en el presupuesto</strong> ni en el Estado de Resultados.
+      Úsalo para errores de registro o si no sabes qué pasó.
+    </div>`;
+}
+
+function activarMotivo(cont, prefijo) {
+  cont.querySelectorAll('[data-motivo]').forEach(b => {
+    b.onclick = () => {
+      _reconMotivo = b.dataset.motivo;
+      cont.querySelectorAll('[data-motivo]').forEach(x => x.classList.toggle('active', x === b));
+      document.getElementById(prefijo + '-mov').style.display = _reconMotivo === 'mov' ? 'block' : 'none';
+      document.getElementById(prefijo + '-ajuste-nota').style.display = _reconMotivo === 'ajuste' ? 'block' : 'none';
+    };
+  });
+  initMoneyInputs(cont);
+}
+
+// Pinta (o esconde) el bloque según la diferencia. Solo se repinta si cambia
+// el tipo o el monto, para no borrar lo que el usuario ya escribió.
+let _motivoClave = '';
+function pintarMotivoRecon(diff) {
+  const cont = document.getElementById('rf-motivo');
+  if (!cont) return;
+  const cid = (_reconAccount === 'transfer' && _reconCuentaId) ? _reconCuentaId : '';
+  const tipo = Math.round(diff) ? tipoMovRecon(diff, cid) : null;
+  if (!tipo) { cont.style.display = 'none'; cont.innerHTML = ''; _motivoClave = ''; return; }
+  const abs = Math.abs(Math.round(diff));
+  const clave = tipo + ':' + cid;
+  cont.style.display = 'block';
+  if (clave === _motivoClave) {
+    // Mismo tipo: solo se actualiza el monto sugerido y el título.
+    const m = document.getElementById('rfm-monto');
+    if (m) m.value = fmtInput(abs);
+    const t = cont.querySelector('.rf-motivo-tit');
+    if (t) t.textContent = tipo === 'expense' ? `¿En qué se fueron esos ${fmt(abs)}?` : `¿De dónde salieron esos ${fmt(abs)}?`;
+    return;
+  }
+  _motivoClave = clave;
+  // Plata que falta: por defecto es un gasto. Plata de más: por defecto ajuste.
+  _reconMotivo = tipo === 'expense' ? 'mov' : 'ajuste';
+  const esCred = cid && cuentaTipo(cid) === 'credito';
+  cont.innerHTML = htmlMotivoRecon(tipo, abs, 'rfm', esCred ? 'Intereses y comisiones' : (tipo === 'expense' ? 'Otros gastos' : 'Otros ingresos'));
+  activarMotivo(cont, 'rfm');
+}
+
+// Lee el bloque y arma la transacción, o null si es solo ajuste.
+function leerMotivoRecon(diff, account, cuentaId, date, prefijo) {
+  const pf = prefijo || 'rfm';
+  const tipo = Math.round(diff) ? tipoMovRecon(diff, cuentaId) : null;
+  if (!tipo || _reconMotivo !== 'mov' || !document.getElementById(pf + '-monto')) return null;
+  const monto = moneyVal(pf + '-monto');
+  const abs = Math.abs(Math.round(diff));
+  if (!(monto > 0)) return { error: '⚠ Escribe el monto del ' + (tipo === 'expense' ? 'gasto' : 'ingreso') + ' o elige "Solo ajustar"' };
+  if (monto > abs) return { error: `⚠ El ${tipo === 'expense' ? 'gasto' : 'ingreso'} no puede ser mayor que la diferencia (${fmt(abs)})` };
+  const cats = tipo === 'expense' ? EXPENSE_CATS : INCOME_CATS;
+  const catSel = document.getElementById(pf + '-cat').value;
+  const desc = document.getElementById(pf + '-desc').value.trim();
+  return { tx: { id: uid(), type: tipo, amount: monto, date, category: cats.includes(catSel) ? catSel : cats[cats.length - 1],
+    account, cuentaId: account === 'transfer' ? (cuentaId || '') : '', notes: desc || 'Detectado al conciliar' } };
+}
+
+/* Conciliaciones ya guardadas: convertir su diferencia (o parte) en gasto
+   o ingreso. El saldo no cambia: el movimiento entra y el ajuste baja en
+   lo mismo. Así los descuadres viejos también llegan al presupuesto. */
+function abrirConvertirRecon(id) {
+  const rec = balances.find(b => b.id === id);
+  if (!rec) return;
+  const cid = rec.cuentaId || '';
+  const tipo = tipoMovRecon(rec.diff, cid);
+  if (!tipo) return;
+  const abs = Math.abs(Math.round(rec.diff));
+  _reconMotivo = 'mov';
+  const esCred = cid && cuentaTipo(cid) === 'credito';
+  const donde = ACCOUNT_LABELS[rec.account] + (cid ? ' · ' + cuentaName(cid) : '');
+  openModal(tipo === 'expense' ? '💸 Registrar como gasto' : '📈 Registrar como ingreso', `
+    <p class="muted" style="margin-bottom:.9rem;line-height:1.5">Conciliación de <strong>${esc(donde)}</strong> del ${fechaCorta(rec.date)}:
+      ajuste de <strong>${rec.diff > 0 ? '+' : ''}${fmt(rec.diff)}</strong>. Tu saldo no cambia; ${tipo === 'expense'
+      ? 'el gasto pasa a contar en el presupuesto de ese mes.' : 'el ingreso pasa a contar en ese mes.'}</p>
+    <div id="cvr-box" class="rf-motivo"></div>
+    <button class="btn-primary" id="cvr-ok">Guardar</button>
+  `);
+  const box = document.getElementById('cvr-box');
+  box.innerHTML = htmlMotivoRecon(tipo, abs, 'cvr', esCred ? 'Intereses y comisiones' : (tipo === 'expense' ? 'Otros gastos' : 'Otros ingresos'));
+  // Aquí no hay "solo ajustar": ya es un ajuste.
+  box.querySelector('.tab-switcher').style.display = 'none';
+  document.getElementById('cvr-ajuste-nota').style.display = 'none';
+  initMoneyInputs(box);
+  document.getElementById('cvr-ok').onclick = async () => {
+    const mov = leerMotivoRecon(rec.diff, rec.account, cid, rec.date, 'cvr');
+    if (!mov) return;
+    if (mov.error) { showToast(mov.error); return; }
+    if (!tomarCandado()) return;
+    try {
+      const aviso = avisoPresupuesto(mov.tx);
+      await saveTransaction(mov.tx);
+      // Si ya tenía un movimiento vinculado, se conserva el primero.
+      const nuevo = Object.assign({}, rec, { diff: residuoRecon(rec.diff, mov.tx, cid) });
+      if (!nuevo.txId) nuevo.txId = mov.tx.id;
+      await saveBalanceRecord(nuevo);
+      closeModal();
+      showToast(aviso || `✅ Registrado ${fmt(mov.tx.amount)} en ${mov.tx.category}`);
+      renderPage(currentPage);
+    } catch (e) {
+      console.error('Error convirtiendo conciliación:', e);
+      showToast('❌ No se pudo guardar. Intenta de nuevo.');
+    } finally { soltarCandado(); }
+  };
 }
 
 async function saveReconciliationForm() {
@@ -6574,22 +6771,32 @@ async function saveReconciliationForm() {
   const previousAmount = previousBalanceFor(_reconAccount, cuentaId);
   const diff = amount - previousAmount;
 
+  // ¿La diferencia fue un gasto/ingreso real? Se registra como movimiento
+  // (cuenta en presupuesto y reportes) y la conciliación guarda solo el resto.
+  const mov = leerMotivoRecon(diff, _reconAccount, cuentaId, date);
+  if (mov && mov.error) { showToast(mov.error); return; }
+
   const rec = {
     id: uid(),
     account: _reconAccount,
     cuentaId,
     previousAmount,
     amount,
-    diff,
+    diff: mov ? residuoRecon(diff, mov.tx, cuentaId) : diff,
     date,
     notes,
     createdAt: Date.now()
   };
+  if (mov) rec.txId = mov.tx.id;
   if (!tomarCandado()) return;
   try {
+    const aviso = mov ? avisoPresupuesto(mov.tx) : '';
+    if (mov) await saveTransaction(mov.tx);
     await saveBalanceRecord(rec);
     closeModal();
-    showToast(`✅ Conciliado · Diferencia: ${diff >= 0 ? '+' : ''}${fmt(diff)}`);
+    showToast(mov
+      ? `✅ Conciliado · ${mov.tx.type === 'expense' ? 'gasto' : 'ingreso'} de ${fmt(mov.tx.amount)} en ${mov.tx.category}${aviso ? ' · ' + aviso.replace(/^✅ Guardado · /, '') : ''}`
+      : `✅ Conciliado · Diferencia: ${diff >= 0 ? '+' : ''}${fmt(diff)}`);
     renderPage(currentPage);
   } catch (e) {
     console.error('Error guardando conciliacion:', e);
@@ -6871,6 +7078,7 @@ async function importJSON(file) {
       previousAmount: num(b.previousAmount), amount: num(b.amount),
       diff: Number.isFinite(Number(b.diff)) ? Math.max(-MONTO_MAX, Math.min(MONTO_MAX, Number(b.diff))) : 0,
       date: fechaOk(b.date), notes: txt(b.notes, 200),
+      txId: idOk(b.txId),
       createdAt: Number(b.createdAt) || Date.now()
     }));
 

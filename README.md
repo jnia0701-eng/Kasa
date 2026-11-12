@@ -318,3 +318,29 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
 - Recordatorio: pagar la tarjeta **no es gasto** y no cambia el Total Disponible; cada compra
   ya se descontó al registrarla. Baja la plata del origen y baja la deuda en lo mismo.
 - El formato de datos no cambia (IndexedDB v7, JSON 9).
+
+---
+
+## v9 · La conciliación ya cuenta en el presupuesto
+
+Antes una conciliación solo **ajustaba** el saldo: si faltaban $30.000 en efectivo, el saldo
+quedaba bien pero esos $30.000 no aparecían en el presupuesto ni en el Estado de Resultados.
+
+**💸 ¿En qué se fueron esos $X?**
+- Al conciliar, si falta plata (o la deuda de la tarjeta subió), Kasa pregunta qué fue:
+  - **Gasto que no anoté** (por defecto): eliges categoría y monto. Se registra como gasto
+    real, **cuenta en el presupuesto** del mes y en los reportes. Si pones menos que la
+    diferencia, el resto queda como ajuste.
+  - **Solo ajustar**: como antes. Para errores de registro o si no sabes qué pasó.
+- Si sobra plata, ofrece registrarla como **ingreso que no anoté** (por defecto, solo ajuste).
+- En tarjetas de crédito, la deuda que sube se sugiere como "Intereses y comisiones".
+- El saldo final es exactamente el mismo: lo que cambia es que el gasto se ve donde debe.
+
+**🔁 Conciliaciones viejas**
+- En el historial, cada conciliación con diferencia tiene **"💸 Registrar como gasto"**
+  (o ingreso): convierte esa diferencia, o una parte, en movimiento con la fecha de la
+  conciliación. El saldo no cambia; el gasto entra al presupuesto de ese mes.
+- El historial muestra el gasto registrado y el ajuste que quedó.
+- Ese movimiento se borra desde su conciliación (al borrarla, Kasa pregunta si también
+  borras el gasto), para que el saldo no se descuadre.
+- Datos: la conciliación guarda `txId` del movimiento (incluido en el respaldo JSON).
