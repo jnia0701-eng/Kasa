@@ -102,6 +102,8 @@ a{text-decoration:none;color:inherit}
   font-family:var(--font-head);font-size:1.5rem;font-weight:800;
   display:flex;align-items:center;gap:.5rem;
 }
+#sidebar-logo .logo-txt{display:flex;flex-direction:column;line-height:1.1}
+#sidebar-logo .logo-ver{font-family:var(--font-body);font-size:.7rem;font-weight:500;color:var(--text3);letter-spacing:.02em;margin-top:.15rem}
 #sidebar-logo .dot{
   width:10px;height:10px;border-radius:50%;
   background:var(--accent);display:inline-block;
@@ -692,7 +694,7 @@ body.modal-open{overflow:hidden}
 
 <!-- Sidebar -->
 <aside id="sidebar">
-  <div id="sidebar-logo"><span class="dot"></span>Kasa</div>
+  <div id="sidebar-logo"><span class="dot"></span><span class="logo-txt">Kasa<small class="logo-ver" id="app-version"></small></span></div>
   <nav id="sidebar-nav">
     <div class="nav-item active" data-page="dashboard">
       <span class="icon">🏠</span> Dashboard
@@ -1444,6 +1446,13 @@ const FIJO_CATS = ['Arriendo/Hipoteca', 'Internet', 'Luz/Agua/Gas', 'Teléfono',
 const ACTIVO_CATS = ['Cuenta bancaria', 'Efectivo', 'Inversiones', 'Bienes raíces', 'Vehículo', 'Fondo de retiro', 'Cuentas por cobrar', 'Otro activo'];
 const PASIVO_CATS = ['Tarjeta de crédito', 'Préstamo bancario', 'Crédito de consumo', 'Hipoteca', 'Deuda personal', 'Impuestos por pagar', 'Otro pasivo'];
 
+/* Versión visible bajo el logo. Súbela junto con CACHE_VERSION de sw.js. */
+const APP_VERSION = 'v9 · 2.5.1';
+function pintarVersion() {
+  const el = document.getElementById('app-version');
+  if (el) el.textContent = 'Versión ' + APP_VERSION;
+}
+pintarVersion();
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 
 /* ─────────────────────────────────────────────────────────

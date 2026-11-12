@@ -101,6 +101,10 @@ Luego activa Pages en **Settings → Pages** igual que en la Opción A (pasos 5�
    ```js
    const CACHE_VERSION = 'kasa-v2.0.0'; // ← incrementa este número
    ```
+   Y actualiza la versión que se ve bajo el logo en `index.html`:
+   ```js
+   const APP_VERSION = 'v9 · 2.5.1'; // ← mismo número que CACHE_VERSION
+   ```
 3. Al abrir la app instalada aparecerá el aviso **"Nueva versión
    disponible · Actualizar"**. Un toque y se recarga sola: ya no hace
    falta cerrarla desde el multitarea.
